@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Amortization Schedule</title>
+  <link rel="stylesheet" type="text/css" href="/static/normalize.css">
+  <link rel="stylesheet" type="text/css" href="/static/app.css">
+</head>
+<body>
+<div class="container">
+  <h1 class="bottom"><a href="/">Amortization Schedule</a></h1>
+  <hr>
+  <form action="" method="get">
+    <fieldset>
+      <legend>Loan Parameters</legend>
+      <div class="field{% if form.amount.flags.required %} field-required{% endif %}">
+        {{ form.amount.label() }}
+        {{ form.amount(type="number", class_="amount", min="10000", step="10000") }} <span class="help">(in LEK)</span>
+        {% if form.amount.errors %}
+        <ul class="errorlist">
+          {% for err in form.amount.errors %}
+          <li>{{ err }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      <div class="field{% if form.interest_rate.flags.required %} field-required{% endif %}">
+        {{ form.interest_rate.label() }}
+        {{ form.interest_rate(type="number", class_="interest-rate", min="0.25", step="0.25") }} <span class="help">(yearly interest rate in <b>%</b>)</span>
+      </div>
+      <div class="field{% if form.period.flags.required %} field-required{% endif %}">
+        {{ form.period.label() }}
+        {{ form.period(type="number", class_="period", min="1", step="1") }}
+        {{ form.period_type(class_="optlist") }}
+      </div>
+      <div class="field{% if form.start_date.flags.required %} field-required{% endif %}">
+        {{ form.start_date.label() }}
+        {{ form.start_date(class_="start-date") }}
+      </div>
+      <div class="actions">
+        <input type="submit" value="Calculate">
+        <input type="reset" value="Clear">
+      </div>
+      <p class="note"><b>* Note</b>: All Fields followed by an asterisk are required!</p>
+    </fieldset>
+    {% if schedule %}
+    <hr>
+    <p class="bottom"><b>Total Interest to Pay on this Loan</b>: {{ total_interest|currency_format }}</p>
+    <table>
+      <thead>
+        <tr>
+          <th class="text-right">No.</th>
+          <th colspan="2" class="text-center">Payment Date</th>
+          <th class="text-right">Original Balance</th>
+          <th class="text-right">Principal</th>
+          <th class="text-right">Interest</th>
+          <th class="text-right">Installment</th>
+          <th class="text-right">Current Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for installment in schedule %}
+        <tr>
+          <td class="text-right">{{ loop.index }}.</td>
+          <td>{{ installment.month }}</td>
+          <td>{{ installment.year }}</td>
+          <td class="text-right">{{ installment.original_balance|currency_format }}</td>
+          <td class="text-right">{{ installment.principal|currency_format }}</td>
+          <td class="text-right">{{ installment.interest|currency_format }}</td>
+          <td class="text-right">{{ installment.monthly_installment|currency_format }}</td>
+          <td class="text-right">{% if loop.last %}0.00{% else %}{{ installment.current_balance|currency_format }}{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div id="payment-graph"></div>
+    {% endif %}
+  </form>
+</div>
+{% if schedule %}
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script type="text/javascript">
+  var installments = {{ schedule|tojson|safe }};
+  google.load('visualization', '1', {'packages': ['corechart']});
+  google.setOnLoadCallback(init);
+
+  function init() {
+    var data = [['Month', 'Principal', 'Interest', { role: 'annotation' } ]], inst;
+    for (var i = 0; i < installments.length; i++) {
+      inst = installments[i];
+
+      data.push([inst[1] + ' ' + inst[0], parseFloat(inst[3], 10), parseFloat(inst[4], 10), '']);
+    }
+    data = google.visualization.arrayToDataTable(data);
+
+      var opts = {
+        width: 760,
+        height: 380,
+        isStacked: true
+      };
+
+      var chart = new google.visualization.ColumnChart(document.getElementById('payment-graph'));
+
+      chart.draw(data, opts);
+
+  }
+</script>
+{% endif %}
+</body>
+</html>

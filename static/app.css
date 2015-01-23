@@ -1,0 +1,131 @@
+body {
+  font-family: Verdana, Tahoma, 'Helvetica Neue', Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4, h5, h6 { font-family: Cambria, Georgia, 'Times New Roman', Times, serif; margin: 0; }
+h1 { font-size: 24px; margin-bottom: 0.5em; }
+h2 { font-size: 20px; margin-bottom: 0.75em; }
+h3 { font-size: 18px; margin-bottom: 1em; }
+h4 { font-size: 16px; margin-bottom: 1em; }
+h5 { font-size: 14px; margin-bottom: 1.25em; }
+h6 { font-size: 13px; margin-bottom: 1.5em; }
+
+a { color: #009dd9; }
+a:hover { color: #06c; }
+h1 > a { text-decoration: none; }
+
+hr {
+  border: 0;
+  height: 1px;
+  background: #ccc;
+  margin: 0;
+  margin-bottom: 1.5em;
+}
+
+table {
+  border-collapse: collapse;
+  margin-bottom: 1.5em;
+  width: 100%;
+}
+
+th, td {
+  padding: 2px 5px;
+  text-align: left;
+}
+
+th {
+  background: #f0f0f0;
+  border-bottom: 2px solid #cdcdcd;
+  font-weight: bold;
+  padding-top: 9px;
+  padding-bottom: 6px;
+  text-shadow: 1px 1px 0 #fff;
+}
+
+td {
+  border-bottom: 1px solid #ccc;
+}
+
+tbody > tr:nth-child(even) > td {
+  background-color: #f9f9f9;
+}
+
+tbody > tr:hover > td {
+  background-color: #fec;
+}
+
+fieldset {
+  width: 590px;
+  margin: 0 auto 1.5em;
+}
+
+legend {
+  font-size: 14px;
+  font-weight: bold;
+  padding: 0 0.5em;
+}
+
+.field {
+  margin-bottom: 0.5em;
+  padding: 0.25em 0.75em;
+}
+
+.field > label {
+  display: inline-block;
+  width: 120px;
+}
+
+.field-required > label {
+  font-weight: bold;
+}
+
+.field-required > label:after {
+  content: " *";
+  color: #cd1811;
+}
+
+.field > input {
+  padding: 2px 4px;
+}
+
+.field-error > label {
+  color: #cd1811;
+}
+
+.help { color: #666; font-size: 11px; }
+
+.errorlist { list-style: none outside none; margin: 0; margin-top: 0.25em; }
+.errorlist li { margin: 0; padding-left: 84px; font-size: 11px; color: #cd1811; }
+
+.optlist { display: inline-block; list-style: none outside none; margin: 0; margin-left: 1em; padding: 0; }
+.optlist > li { display: inline;  }
+.optlist > li > label { display: inline-block; margin-right: 0.75em; }
+
+.amount { width: 240px; }
+.interest-rate { width: 60px; }
+.period  { width: 48px; }
+.start-date { width: 128px; }
+
+.note { font-size: 11px; color: #666; }
+
+.actions {
+  background: #f5f5f5;
+  border-top: 1px solid #cdcdcd;
+  margin-top: 1em;
+  padding: 1.25em 0 0.75em;
+  text-align: center;
+}
+
+.bottom { margin-bottom: 0; }
+.top { margin-top: 0; }
+
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+.container {
+  width: 780px;
+  margin: 0 auto;
+}
