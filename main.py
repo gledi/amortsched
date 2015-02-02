@@ -13,20 +13,11 @@ from collections import defaultdict, namedtuple
 
 import jinja2
 import webapp2
-from wtforms import (
-    Form,
-    DecimalField,
-    IntegerField,
-    RadioField,
-    DateField,
-)
-from wtforms.validators import (
-    InputRequired,
-    Optional,
-)
+from wtforms import Form, DecimalField, IntegerField, RadioField, DateField
+from wtforms.validators import InputRequired, Optional
+
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
-
 
 tojson = partial(json.dumps, default=lambda obj: '{:.2f}'.format(obj) if isinstance(obj, D) else obj)
 currency_format = lambda val: '{:,.2f}'.format(val) if isinstance(val, (float, D)) else val
@@ -103,8 +94,10 @@ def generate_schedule(amount, interest_rate, period, period_type, start_date):
 
 class MainHandler(webapp2.RequestHandler):
     def get(self):
+        loan = {}
         schedule = []
         total_interest = None
+
         form = AmSchedForm(self.request.GET)
 
         if self.request.GET and form.validate():
@@ -113,6 +106,10 @@ class MainHandler(webapp2.RequestHandler):
             period = form.period.data
             period_type = form.period_type.data
             start_date = form.start_date.data or datetime.date.today()
+            loan = form.data.copy()
+            if not form.start_date.data:
+                loan['start_date'] = start_date
+
             logging.info('Amount: {0:,.2f}\tInterest Rate: {1:,.2f}\tPeriod: {2}\tPeriod Type: {3}\tStart Date: {4}'.format(
                 amount,
                 interest_rate,
@@ -122,7 +119,12 @@ class MainHandler(webapp2.RequestHandler):
             ))
             schedule = generate_schedule(amount, interest_rate, period, period_type, start_date)
             total_interest = sum(map(itemgetter(4), schedule))
-        self.response.write(render_template('index.html', form=form, schedule=schedule, total_interest=total_interest))
+        self.response.write(render_template('index.html',
+                form=form,
+                loan=loan,
+                schedule=schedule,
+                total_interest=total_interest,
+            ))
 
 
 app = webapp2.WSGIApplication([

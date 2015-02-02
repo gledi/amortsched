@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Amortization Schedule</title>
+  <title>Loan Amortization Schedule Generator</title>
   <meta name="description" content="Loan Amortization Schedule Generator">
   <meta name="author" content="Gledi Caushaj <gledi.alb@gmail.com>">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,10 +11,10 @@
 </head>
 <body>
 <div class="container">
-  <div class="row">
+  <div class="row hide-on-print">
     <div class="twelve columns">
-      <h1 class="bottom"><a href="/">Amortization Schedule</a></h1>
-      <hr>
+      <h1 class="bottom"><a href="/">Loan Amortization Schedule Generator</a></h1>
+      <hr class="top">
       <form action="" method="get">
         <fieldset>
           <legend>Loan Parameters</legend>
@@ -64,50 +64,56 @@
             {% endif %}
           </div>
           <div class="actions">
-            <input type="submit" value="Calculate">
-            <input type="reset" value="Clear">
+            <input type="submit" class="button button-primary" value="Calculate">
+            <input type="reset" value="Reset">
           </div>
           <p class="note"><b>* Note</b>: All Fields followed by an asterisk are required!</p>
         </fieldset>
+        <pre>{{ loan }}</pre>
       </form>
     </div>
   </div>
+  {% if schedule %}
   <div class="row">
     <div class="twelve columns">
-        {% if schedule %}
-        <hr>
-        <p class="bottom"><b>Total Interest to Pay on this Loan</b>: {{ total_interest|currency_format }}</p>
-        <table>
-          <thead>
-            <tr>
-              <th class="text-right">No.</th>
-              <th colspan="2" class="text-center">Payment Date</th>
-              <th class="text-right">Original Balance</th>
-              <th class="text-right">Principal</th>
-              <th class="text-right">Interest</th>
-              <th class="text-right">Installment</th>
-              <th class="text-right">Current Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for installment in schedule %}
-            <tr>
-              <td class="text-right">{{ loop.index }}.</td>
-              <td>{{ installment.month }}</td>
-              <td>{{ installment.year }}</td>
-              <td class="text-right">{{ installment.original_balance|currency_format }}</td>
-              <td class="text-right">{{ installment.principal|currency_format }}</td>
-              <td class="text-right">{{ installment.interest|currency_format }}</td>
-              <td class="text-right">{{ installment.monthly_installment|currency_format }}</td>
-              <td class="text-right">{% if loop.last %}0.00{% else %}{{ installment.current_balance|currency_format }}{% endif %}</td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        <div id="payment-graph"></div>
-        {% endif %}
+      <hr class="top bottom">
+      <p class="bottom"><b>Loan Amount:</b> {{ loan['amount'] }}</p>
+      <p class="bottom"><b>Interest Rate:</b> {{ loan['interest_rate'] }}</p>
+      <p class="bottom"><b>Loan Tenor:</b> {{ loan['period'] }} {% if loan['period_type'] == 'Y' %}Years{% else %}Months{% endif %}</p>
+      <p class="bottom"><b>Start Date:</b> {{ loan['start_date'].strftime('%d/%m/%Y') }}</p>
+      <hr class="top bottom">
+      <p class="bottom"><b>Total Interest to Pay on this Loan</b>: {{ total_interest|currency_format }}</p>
+      <table class="table-striped table-hover">
+        <thead>
+          <tr>
+            <th class="text-right">No.</th>
+            <th colspan="2" class="text-center">Payment Date</th>
+            <th class="text-right">Original Balance</th>
+            <th class="text-right">Principal</th>
+            <th class="text-right">Interest</th>
+            <th class="text-right">Installment</th>
+            <th class="text-right">Current Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for installment in schedule %}
+          <tr>
+            <td class="text-right">{{ loop.index }}.</td>
+            <td>{{ installment.month }}</td>
+            <td>{{ installment.year }}</td>
+            <td class="text-right">{{ installment.original_balance|currency_format }}</td>
+            <td class="text-right">{{ installment.principal|currency_format }}</td>
+            <td class="text-right">{{ installment.interest|currency_format }}</td>
+            <td class="text-right">{{ installment.monthly_installment|currency_format }}</td>
+            <td class="text-right">{% if loop.last %}0.00{% else %}{{ installment.current_balance|currency_format }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div id="payment-graph"></div>
     </div>
   </div>
+  {% endif %}
 </div>
 <script type="text/javascript" src="/static/moment.min.js"></script>
 <script type="text/javascript" src="/static/pikaday.js"></script>
