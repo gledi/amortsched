@@ -20,7 +20,7 @@
           <legend>Loan Parameters</legend>
           <div class="field{% if form.amount.flags.required %} field-required{% endif %}{% if form.amount.errors %} field-error{% endif %}">
             {{ form.amount.label() }}
-            {{ form.amount(type="number", class_="amount", min="5000", step="5000") }} <span class="help">(in LEK)</span>
+            {{ form.amount(type="text", class_="amount") }} <span class="help">(in LEK)</span>
             {% if form.amount.errors %}
             <ul class="errorlist">
               {% for err in form.amount.errors %}
@@ -31,7 +31,7 @@
           </div>
           <div class="field{% if form.interest_rate.flags.required %} field-required{% endif %}{% if form.interest_rate.errors %} field-error{% endif %}">
             {{ form.interest_rate.label() }}
-            {{ form.interest_rate(type="number", class_="interest-rate", min="0.25", step="0.25") }} <span class="help">(yearly interest rate in <b>%</b>)</span>
+            {{ form.interest_rate(type="text", class_="interest-rate") }} <span class="help">(yearly interest rate in <b>%</b>)</span>
             {% if form.interest_rate.errors %}
             <ul class="errorlist">
               {% for err in form.interest_rate.errors %}
