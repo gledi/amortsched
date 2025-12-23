@@ -5,7 +5,21 @@ description = "Amortization Schedule Generator"
 readme = "README.md"
 authors = [{ name = "Gledi Caushaj", email = "gledi.alb@gmail.com" }]
 requires-python = ">=3.14"
-dependencies = ["flask>=3.1.2", "rich>=14.2.0"]
+dependencies = [
+    "starlette",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "rodi",
+    "mashumaro[orjson]",
+    "rich",
+]
+
+[project.optional-dependencies]
+prod = ["uvicorn[standard]"]
+
+[dependency-groups]
+tests = ["pytest", "coverage", "pytest-asyncio"]
+dev = ["debugpy", "ipython", "ruff"]
 
 [project.scripts]
 amortsched = "amortsched.cli:main"
@@ -13,9 +27,6 @@ amortsched = "amortsched.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[dependency-groups]
-dev = ["ipython>=9.8.0", "ruff>=0.14.8"]
 
 [tool.ruff]
 line-length = 120
