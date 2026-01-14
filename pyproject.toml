@@ -10,15 +10,25 @@ dependencies = [
     "sqlalchemy[asyncio]",
     "asyncpg",
     "rodi",
+    "orjson",
     "mashumaro[orjson]",
     "rich",
+    "click",
+    "bcrypt",
+    "argon2-cffi",
 ]
 
 [project.optional-dependencies]
 prod = ["uvicorn[standard]"]
 
 [dependency-groups]
-tests = ["pytest", "coverage", "pytest-asyncio"]
+tests = [
+    "pytest",
+    "coverage",
+    "pytest-asyncio",
+    "factory-boy",
+    "pytest-factoryboy",
+]
 dev = ["debugpy", "ipython", "ruff"]
 
 [project.scripts]

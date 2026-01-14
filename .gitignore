@@ -1,1 +1,7 @@
 *.pyc
+
+# claude code files
+AGENTS.md
+CLAUDE.md
+.opencode/
+.claude/
