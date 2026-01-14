@@ -35,6 +35,7 @@ async def create_schedule(request: Request) -> Response:
 
     for ep in req.extra_payments:
         schedule.add_one_time_extra_payment(ep.date, ep.amount)
+
     for rep in req.recurring_extra_payments:
         schedule.add_recurring_extra_payment(start_date=rep.start_date, amount=rep.amount, count=rep.count)
 
