@@ -1,42 +1,51 @@
 [project]
-name = "amortsched"
+name = "amortsched-workspace"
 version = "0.1.0"
-description = "Amortization Schedule Generator"
+description = "Workspace root for amortsched apps and libs"
 readme = "README.md"
-authors = [{ name = "Gledi Caushaj", email = "gledi.alb@gmail.com" }]
 requires-python = ">=3.14"
-dependencies = [
-    "starlette",
-    "sqlalchemy[asyncio]",
-    "asyncpg",
-    "rodi",
-    "orjson",
-    "mashumaro[orjson]",
-    "rich",
-    "click",
-    "bcrypt",
-    "argon2-cffi",
-]
-
-[project.optional-dependencies]
-prod = ["uvicorn[standard]"]
 
 [dependency-groups]
-tests = [
-    "pytest",
-    "coverage",
-    "pytest-asyncio",
-    "factory-boy",
-    "pytest-factoryboy",
+workspace = [
+    "amortsched-core",
+    "amortsched-app",
+    "amortsched-auth",
+    "amortsched-data-inmemory",
+    "amortsched-data-sqlalchemy",
+    "amortsched-data-mongo",
+    "amortsched-data-tortoise",
+    "amortsched-cli",
+    "amortsched-api",
+    "amortsched-web",
 ]
-dev = ["debugpy", "ipython", "ruff"]
+dev = ["ruff"]
+tests = ["pytest", "httpx"]
 
-[project.scripts]
-amortsched = "amortsched.cli:main"
+[tool.uv.workspace]
+members = [
+    "apps/cli",
+    "apps/api",
+    "apps/web",
+    "libs/core",
+    "libs/app",
+    "libs/auth",
+    "libs/data-inmemory",
+    "libs/data-sqlalchemy",
+    "libs/data-mongo",
+    "libs/data-tortoise",
+]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.uv.sources]
+amortsched-core = { workspace = true }
+amortsched-app = { workspace = true }
+amortsched-auth = { workspace = true }
+amortsched-data-inmemory = { workspace = true }
+amortsched-data-sqlalchemy = { workspace = true }
+amortsched-data-mongo = { workspace = true }
+amortsched-data-tortoise = { workspace = true }
+amortsched-cli = { workspace = true }
+amortsched-api = { workspace = true }
+amortsched-web = { workspace = true }
 
 [tool.ruff]
 line-length = 120
@@ -44,3 +53,31 @@ line-length = 120
 [tool.ruff.lint]
 select = ["E", "F", "W", "C90", "B", "I"]
 ignore = []
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+asyncio_mode = "auto"
+testpaths = [
+    "libs/core/tests",
+    "libs/app/tests",
+    "libs/auth/tests",
+    "libs/data-inmemory/tests",
+    "apps/api/tests",
+    "apps/web/tests",
+]
+
+[tool.pyright]
+reportMissingImports = false
+reportMissingTypeStubs = false
+extraPaths = [
+    "libs/core/src",
+    "libs/app/src",
+    "libs/auth/src",
+    "libs/data-inmemory/src",
+    "libs/data-sqlalchemy/src",
+    "libs/data-mongo/src",
+    "libs/data-tortoise/src",
+    "apps/cli/src",
+    "apps/api/src",
+    "apps/web/src",
+]

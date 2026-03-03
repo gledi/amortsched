@@ -1,6 +1,8 @@
 {
     "python.testing.pytestArgs": [
-        "tests"
+        "libs/core/tests",
+        "libs/app/tests",
+        "libs/data-inmemory/tests"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true
