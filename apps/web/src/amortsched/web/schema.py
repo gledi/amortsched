@@ -58,8 +58,6 @@ from amortsched.web.deps import (
     get_user_handler,
 )
 
-# ── Helper ────────────────────────────────────────────────────────────
-
 
 def _get_user_id(info: Info) -> uuid.UUID:
     """Extract authenticated user_id from context. Raises InvalidTokenError if missing."""
@@ -67,9 +65,6 @@ def _get_user_id(info: Info) -> uuid.UUID:
     if user_id is None:
         raise InvalidTokenError("Authentication required")
     return user_id
-
-
-# ── Strawberry Types ──────────────────────────────────────────────────
 
 
 @strawberry.type
@@ -201,9 +196,6 @@ class ScheduleType:
     totals: TotalsType | None
 
 
-# ── Inputs ────────────────────────────────────────────────────────────
-
-
 @strawberry.input
 class RegisterInput:
     email: str
@@ -268,9 +260,6 @@ class RecurringExtraPaymentInput:
 class InterestRateChangeInput:
     effective_date: str
     rate: str
-
-
-# ── Converters ────────────────────────────────────────────────────────
 
 
 def _user_to_type(user) -> UserType:
@@ -365,9 +354,6 @@ def _schedule_to_type(schedule) -> ScheduleType:
     )
 
 
-# ── Query ─────────────────────────────────────────────────────────────
-
-
 @strawberry.type
 class Query:
     @strawberry.field
@@ -414,9 +400,6 @@ class Query:
         handler = get_list_schedules_handler()
         schedules = handler.handle(ListSchedulesQuery(plan_id=uuid.UUID(str(plan_id)), user_id=user_id))
         return [_schedule_to_type(s) for s in schedules]
-
-
-# ── Mutation ──────────────────────────────────────────────────────────
 
 
 @strawberry.type
@@ -594,9 +577,6 @@ class Mutation:
         handler = get_delete_schedule_handler()
         handler.handle(DeleteScheduleCommand(schedule_id=uuid.UUID(str(schedule_id)), user_id=user_id))
         return True
-
-
-# ── Context + Router ──────────────────────────────────────────────────
 
 
 async def get_context(request: Request) -> dict:

@@ -1,23 +1,12 @@
 [project]
-name = "amortsched-api"
+name = "amortsched-validators-mashumaro"
 version = "0.1.0"
-description = "Starlette REST API application"
+description = "Mashumaro-based validator adapter"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "amortsched-app",
-    "amortsched-auth",
-    "amortsched-data-inmemory",
     "mashumaro[orjson]",
-    "orjson",
-    "rodi",
-    "starlette",
-]
-
-[dependency-groups]
-tests = [
-    "httpx",
-    "pytest",
 ]
 
 [build-system]

@@ -42,3 +42,15 @@ async def test_duplicate_email_is_problem_json(client):
     body = resp.json()
     assert body["type"] == "urn:amortsched/errors/duplicate-email"
     assert body["status"] == 409
+
+
+def test_validation_error_returns_422():
+    from amortsched.api.errors import domain_error_to_problem
+    from amortsched.core.errors import ValidationError
+
+    err = ValidationError([{"field": "email", "message": "required"}])
+    status, body = domain_error_to_problem(err)
+    assert status == 422
+    assert body["type"] == "urn:amortsched/errors/validation-error"
+    assert body["title"] == "Validation Error"
+    assert body["errors"] == [{"field": "email", "message": "required"}]

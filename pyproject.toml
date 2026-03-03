@@ -14,6 +14,9 @@ workspace = [
     "amortsched-data-sqlalchemy",
     "amortsched-data-mongo",
     "amortsched-data-tortoise",
+    "amortsched-validators-mashumaro",
+    "amortsched-validators-pydanticv2",
+    "amortsched-validators-msgspec",
     "amortsched-cli",
     "amortsched-api",
     "amortsched-web",
@@ -33,6 +36,9 @@ members = [
     "libs/data-sqlalchemy",
     "libs/data-mongo",
     "libs/data-tortoise",
+    "libs/validators-mashumaro",
+    "libs/validators-pydanticv2",
+    "libs/validators-msgspec",
 ]
 
 [tool.uv.sources]
@@ -43,6 +49,9 @@ amortsched-data-inmemory = { workspace = true }
 amortsched-data-sqlalchemy = { workspace = true }
 amortsched-data-mongo = { workspace = true }
 amortsched-data-tortoise = { workspace = true }
+amortsched-validators-mashumaro = { workspace = true }
+amortsched-validators-pydanticv2 = { workspace = true }
+amortsched-validators-msgspec = { workspace = true }
 amortsched-cli = { workspace = true }
 amortsched-api = { workspace = true }
 amortsched-web = { workspace = true }
@@ -56,12 +65,14 @@ ignore = []
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
-asyncio_mode = "auto"
 testpaths = [
     "libs/core/tests",
     "libs/app/tests",
     "libs/auth/tests",
     "libs/data-inmemory/tests",
+    "libs/validators-mashumaro/tests",
+    "libs/validators-pydanticv2/tests",
+    "libs/validators-msgspec/tests",
     "apps/api/tests",
     "apps/web/tests",
 ]
@@ -77,6 +88,9 @@ extraPaths = [
     "libs/data-sqlalchemy/src",
     "libs/data-mongo/src",
     "libs/data-tortoise/src",
+    "libs/validators-mashumaro/src",
+    "libs/validators-pydanticv2/src",
+    "libs/validators-msgspec/src",
     "apps/cli/src",
     "apps/api/src",
     "apps/web/src",

@@ -1,23 +1,12 @@
 [project]
-name = "amortsched-web"
+name = "amortsched-validators-pydanticv2"
 version = "0.1.0"
-description = "FastAPI + Strawberry web application"
+description = "Pydantic v2 based validator adapter"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "amortsched-app",
-    "amortsched-auth",
-    "amortsched-data-inmemory",
-    "fastapi",
     "pydantic>=2",
-    "rodi",
-    "strawberry-graphql",
-]
-
-[dependency-groups]
-tests = [
-    "httpx",
-    "pytest",
 ]
 
 [build-system]

@@ -6,8 +6,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# ── Auth ──────────────────────────────────────────────────────────────
-
 
 class RegisterRequest(BaseModel):
     email: str
@@ -34,9 +32,6 @@ class AuthResponse(BaseModel):
     token: str
 
 
-# ── Profile ───────────────────────────────────────────────────────────
-
-
 class UpsertProfileRequest(BaseModel):
     display_name: str | None = Field(default=None, alias="displayName")
     phone: str | None = None
@@ -57,9 +52,6 @@ class ProfileResponse(BaseModel):
     updated_at: datetime.datetime = Field(alias="updatedAt")
 
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
-
-
-# ── Plan ──────────────────────────────────────────────────────────────
 
 
 class Term(BaseModel):
@@ -155,9 +147,6 @@ class PlanResponse(BaseModel):
     updated_at: datetime.datetime = Field(alias="updatedAt")
 
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
-
-
-# ── Schedule ──────────────────────────────────────────────────────────
 
 
 class Balance(BaseModel):

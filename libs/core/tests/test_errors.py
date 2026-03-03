@@ -5,6 +5,7 @@ from amortsched.core.errors import (
     NotFoundError,
     PlanNotFoundError,
     UserNotFoundError,
+    ValidationError,
 )
 
 
@@ -26,3 +27,17 @@ def test_plan_not_found_error_is_not_found_error():
     assert isinstance(err, NotFoundError)
     assert isinstance(err, DomainError)
     assert err.plan_id == pid
+
+
+def test_validation_error_is_domain_error():
+    errors = [{"field": "amount", "message": "required"}]
+    err = ValidationError(errors)
+    assert isinstance(err, DomainError)
+    assert err.errors == errors
+    assert str(err) == "Validation failed"
+
+
+def test_validation_error_custom_message():
+    err = ValidationError([], message="Bad input")
+    assert str(err) == "Bad input"
+    assert err.errors == []

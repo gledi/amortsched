@@ -12,11 +12,13 @@ from amortsched.core.errors import (
     InvalidTokenError,
     NotFoundError,
     PlanOwnershipError,
+    ValidationError,
 )
 
 _URN_PREFIX = "urn:amortsched"
 
 _ERROR_MAP: list[tuple[type[DomainError], int, str, str]] = [
+    (ValidationError, 422, "/errors/validation-error", "Validation Error"),
     (ExpiredTokenError, 401, "/errors/token-expired", "Token Expired"),
     (InvalidTokenError, 401, "/errors/invalid-token", "Invalid Token"),
     (AuthenticationError, 401, "/errors/authentication-failed", "Authentication Failed"),
@@ -31,12 +33,15 @@ def domain_error_to_problem(exc: DomainError) -> tuple[int, dict]:
     """Convert a domain error to (status_code, RFC 9457 body dict)."""
     for error_type, status, type_suffix, title in _ERROR_MAP:
         if isinstance(exc, error_type):
-            return status, {
+            body = {
                 "type": f"{_URN_PREFIX}{type_suffix}",
                 "title": title,
                 "status": status,
                 "detail": str(exc),
             }
+            if hasattr(exc, "errors"):
+                body["errors"] = exc.errors
+            return status, body
     return 400, {
         "type": f"{_URN_PREFIX}/errors/domain-error",
         "title": "Domain Error",

@@ -1,5 +1,3 @@
-"""Mashumaro request/response schemas for the Starlette API."""
-
 import datetime
 import uuid
 from dataclasses import dataclass, field
@@ -15,9 +13,6 @@ def _decimal_serializer(value: Decimal) -> str:
 
 class SchemaConfig(BaseConfig):
     serialization_strategy = {Decimal: {"serialize": _decimal_serializer, "deserialize": Decimal}}
-
-
-# ── Auth ──────────────────────────────────────────────────────────────
 
 
 @dataclass
@@ -54,9 +49,6 @@ class AuthResponse(DataClassORJSONMixin):
         serialize_by_alias = True
 
 
-# ── Profile ───────────────────────────────────────────────────────────
-
-
 @dataclass
 class UpsertProfileRequest(DataClassORJSONMixin):
     display_name: str | None = None
@@ -88,9 +80,6 @@ class ProfileResponse(DataClassORJSONMixin):
             "updated_at": "updatedAt",
         }
         serialize_by_alias = True
-
-
-# ── Plan ──────────────────────────────────────────────────────────────
 
 
 @dataclass
@@ -243,9 +232,6 @@ class PlanResponse(DataClassORJSONMixin):
             "updated_at": "updatedAt",
         }
         serialize_by_alias = True
-
-
-# ── Schedule ──────────────────────────────────────────────────────────
 
 
 @dataclass

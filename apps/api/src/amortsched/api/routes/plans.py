@@ -6,6 +6,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from amortsched.api.inject import inject
 from amortsched.api.middleware import get_current_user_id
 from amortsched.api.validators import (
     AddExtraPaymentRequest,
@@ -74,12 +75,11 @@ def _plan_to_response(plan) -> PlanResponse:
     )
 
 
-async def create_plan(request: Request) -> Response:
+@inject
+async def create_plan(request: Request, handler: CreatePlanHandler) -> Response:
     user_id = get_current_user_id(request)
     body = await request.body()
     req = CreatePlanRequest.from_json(body)
-    container = request.app.state.container
-    handler = container.resolve(CreatePlanHandler)
     early_fees = EarlyPaymentFees(fixed=req.early_payment_fees.fixed, percent=req.early_payment_fees.percent)
     plan = handler.handle(
         CreatePlanCommand(
@@ -97,32 +97,29 @@ async def create_plan(request: Request) -> Response:
     return Response(content=resp.to_json(), media_type="application/json", status_code=201)
 
 
-async def list_plans(request: Request) -> Response:
+@inject
+async def list_plans(request: Request, handler: ListPlansHandler) -> Response:
     user_id = get_current_user_id(request)
-    container = request.app.state.container
-    handler = container.resolve(ListPlansHandler)
     plans = handler.handle(ListPlansQuery(user_id=user_id))
     payload = [_plan_to_response(p).to_dict() for p in plans]
     return JSONResponse(payload)
 
 
-async def get_plan(request: Request) -> Response:
+@inject
+async def get_plan(request: Request, handler: GetPlanHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
-    container = request.app.state.container
-    handler = container.resolve(GetPlanHandler)
     plan = handler.handle(GetPlanQuery(plan_id=plan_id, user_id=user_id))
     resp = _plan_to_response(plan)
     return Response(content=resp.to_json(), media_type="application/json")
 
 
-async def update_plan(request: Request) -> Response:
+@inject
+async def update_plan(request: Request, handler: UpdatePlanHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
     body = await request.body()
     req = UpdatePlanRequest.from_json(body)
-    container = request.app.state.container
-    handler = container.resolve(UpdatePlanHandler)
     early_fees = None
     if req.early_payment_fees is not None:
         early_fees = EarlyPaymentFees(fixed=req.early_payment_fees.fixed, percent=req.early_payment_fees.percent)
@@ -145,32 +142,29 @@ async def update_plan(request: Request) -> Response:
     return Response(content=resp.to_json(), media_type="application/json")
 
 
-async def delete_plan(request: Request) -> Response:
+@inject
+async def delete_plan(request: Request, handler: DeletePlanHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
-    container = request.app.state.container
-    handler = container.resolve(DeletePlanHandler)
     handler.handle(DeletePlanCommand(plan_id=plan_id, user_id=user_id))
     return Response(status_code=204)
 
 
-async def save_plan(request: Request) -> Response:
+@inject
+async def save_plan(request: Request, handler: SavePlanHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
-    container = request.app.state.container
-    handler = container.resolve(SavePlanHandler)
     plan = handler.handle(SavePlanCommand(plan_id=plan_id, user_id=user_id))
     resp = _plan_to_response(plan)
     return Response(content=resp.to_json(), media_type="application/json")
 
 
-async def add_extra_payment(request: Request) -> Response:
+@inject
+async def add_extra_payment(request: Request, handler: AddOneTimeExtraPaymentHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
     body = await request.body()
     req = AddExtraPaymentRequest.from_json(body)
-    container = request.app.state.container
-    handler = container.resolve(AddOneTimeExtraPaymentHandler)
     plan = handler.handle(
         AddOneTimeExtraPaymentCommand(plan_id=plan_id, user_id=user_id, date=req.date, amount=req.amount)
     )
@@ -178,13 +172,12 @@ async def add_extra_payment(request: Request) -> Response:
     return Response(content=resp.to_json(), media_type="application/json")
 
 
-async def add_recurring_extra_payment(request: Request) -> Response:
+@inject
+async def add_recurring_extra_payment(request: Request, handler: AddRecurringExtraPaymentHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
     body = await request.body()
     req = AddRecurringExtraPaymentRequest.from_json(body)
-    container = request.app.state.container
-    handler = container.resolve(AddRecurringExtraPaymentHandler)
     plan = handler.handle(
         AddRecurringExtraPaymentCommand(
             plan_id=plan_id, user_id=user_id, start_date=req.start_date, amount=req.amount, count=req.count
@@ -194,13 +187,12 @@ async def add_recurring_extra_payment(request: Request) -> Response:
     return Response(content=resp.to_json(), media_type="application/json")
 
 
-async def add_interest_rate_change(request: Request) -> Response:
+@inject
+async def add_interest_rate_change(request: Request, handler: AddInterestRateChangeHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
     body = await request.body()
     req = AddInterestRateChangeRequest.from_json(body)
-    container = request.app.state.container
-    handler = container.resolve(AddInterestRateChangeHandler)
     plan = handler.handle(
         AddInterestRateChangeCommand(plan_id=plan_id, user_id=user_id, effective_date=req.effective_date, rate=req.rate)
     )

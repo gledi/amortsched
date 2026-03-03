@@ -6,6 +6,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from amortsched.api.inject import inject
 from amortsched.api.middleware import get_current_user_id
 from amortsched.api.validators import (
     BalanceResponse,
@@ -62,51 +63,46 @@ def _schedule_to_response(schedule) -> ScheduleResponse:
     )
 
 
-async def preview_schedule(request: Request) -> Response:
+@inject
+async def preview_schedule(request: Request, handler: GenerateScheduleHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
-    container = request.app.state.container
-    handler = container.resolve(GenerateScheduleHandler)
     schedule = handler.handle(GenerateScheduleQuery(plan_id=plan_id, user_id=user_id))
     resp = _schedule_to_response(schedule)
     return Response(content=resp.to_json(), media_type="application/json")
 
 
-async def save_schedule(request: Request) -> Response:
+@inject
+async def save_schedule(request: Request, handler: SaveScheduleHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
-    container = request.app.state.container
-    handler = container.resolve(SaveScheduleHandler)
     schedule = handler.handle(SaveScheduleCommand(plan_id=plan_id, user_id=user_id))
     resp = _schedule_to_response(schedule)
     return Response(content=resp.to_json(), media_type="application/json", status_code=201)
 
 
-async def list_schedules(request: Request) -> Response:
+@inject
+async def list_schedules(request: Request, handler: ListSchedulesHandler) -> Response:
     user_id = get_current_user_id(request)
     plan_id = uuid.UUID(request.path_params["plan_id"])
-    container = request.app.state.container
-    handler = container.resolve(ListSchedulesHandler)
     schedules = handler.handle(ListSchedulesQuery(plan_id=plan_id, user_id=user_id))
     payload = [_schedule_to_response(s).to_dict() for s in schedules]
     return JSONResponse(payload)
 
 
-async def get_schedule(request: Request) -> Response:
+@inject
+async def get_schedule(request: Request, handler: GetScheduleHandler) -> Response:
     user_id = get_current_user_id(request)
     schedule_id = uuid.UUID(request.path_params["schedule_id"])
-    container = request.app.state.container
-    handler = container.resolve(GetScheduleHandler)
     schedule = handler.handle(GetScheduleQuery(schedule_id=schedule_id, user_id=user_id))
     resp = _schedule_to_response(schedule)
     return Response(content=resp.to_json(), media_type="application/json")
 
 
-async def delete_schedule(request: Request) -> Response:
+@inject
+async def delete_schedule(request: Request, handler: DeleteScheduleHandler) -> Response:
     user_id = get_current_user_id(request)
     schedule_id = uuid.UUID(request.path_params["schedule_id"])
-    container = request.app.state.container
-    handler = container.resolve(DeleteScheduleHandler)
     handler.handle(DeleteScheduleCommand(schedule_id=schedule_id, user_id=user_id))
     return Response(status_code=204)
 

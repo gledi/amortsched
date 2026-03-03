@@ -80,13 +80,13 @@ lock/up lock/upgrade:
 	$(UV) lock --upgrade --refresh --resolution=highest --link-mode=copy
 
 sync/dry:
-	$(UV) sync --all-extras --all-groups --locked --dry-run
+	$(UV) sync --all-packages --all-extras --all-groups --locked --dry-run
 
 sync:
-	$(UV) sync --all-extras --all-groups --locked
+	$(UV) sync --all-packages --all-extras --all-groups --locked
 
 sync/prod:
-	$(UV) sync --extra=prod --no-dev --locked --no-install-project
+	$(UV) sync --all-packages --extra=prod --no-dev --locked
 
 tree:
 	$(UV) tree --outdated

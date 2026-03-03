@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 
@@ -177,3 +178,11 @@ class ExpiredTokenError(InvalidTokenError):
 
     def __init__(self) -> None:
         super().__init__("Token has expired")
+
+
+class ValidationError(DomainError):
+    """Raised when input data fails validation."""
+
+    def __init__(self, errors: list[dict[str, Any]], message: str = "Validation failed") -> None:
+        super().__init__(message)
+        self.errors = errors
