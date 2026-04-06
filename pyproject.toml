@@ -1,0 +1,52 @@
+[project]
+name = "amortsched"
+version = "0.1.0"
+description = "Amortization schedule generator API"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic",
+  "pydantic-settings",
+  "sqlalchemy[asyncio]",
+  "psycopg[binary]",
+  "alembic",
+  "structlog",
+  "python-jose[cryptography]",
+]
+
+[dependency-groups]
+dev = [
+  "ruff",
+  "pytest",
+  "pytest-asyncio",
+  "httpx",
+  "testcontainers[postgres]",
+  "factory-boy",
+  "pytest-factoryboy",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/amortsched"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "B", "I"]
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.pyright]
+reportMissingImports = false
+reportMissingTypeStubs = false
+extraPaths = ["src"]
