@@ -1,0 +1,54 @@
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+from amortsched.core.errors import (
+    AmortizationError,
+    AuthenticationError,
+    DomainError,
+    DuplicateEmailError,
+    ExpiredTokenError,
+    InvalidTokenError,
+    NotFoundError,
+    PlanOwnershipError,
+    ValidationError,
+)
+
+_URN_PREFIX = "urn:amortsched"
+
+_ERROR_MAP: list[tuple[type[DomainError], int, str, str]] = [
+    (ValidationError, 422, "/errors/validation-error", "Validation Error"),
+    (ExpiredTokenError, 401, "/errors/token-expired", "Token Expired"),
+    (InvalidTokenError, 401, "/errors/invalid-token", "Invalid Token"),
+    (AuthenticationError, 401, "/errors/authentication-failed", "Authentication Failed"),
+    (PlanOwnershipError, 403, "/errors/forbidden", "Forbidden"),
+    (NotFoundError, 404, "/errors/not-found", "Not Found"),
+    (DuplicateEmailError, 409, "/errors/duplicate-email", "Duplicate Email"),
+    (AmortizationError, 422, "/errors/validation", "Validation Error"),
+]
+
+
+def domain_error_to_problem(exc: DomainError) -> tuple[int, dict]:
+    for error_type, status, type_suffix, title in _ERROR_MAP:
+        if isinstance(exc, error_type):
+            body = {
+                "type": f"{_URN_PREFIX}{type_suffix}",
+                "title": title,
+                "status": status,
+                "detail": str(exc),
+            }
+            if hasattr(exc, "errors"):
+                body["errors"] = exc.errors
+            return status, body
+    return 400, {
+        "type": f"{_URN_PREFIX}/errors/domain-error",
+        "title": "Domain Error",
+        "status": 400,
+        "detail": str(exc),
+    }
+
+
+async def domain_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, DomainError):
+        raise exc
+    status, body = domain_error_to_problem(exc)
+    return JSONResponse(body, status_code=status, media_type="application/problem+json")
