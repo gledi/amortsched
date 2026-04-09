@@ -29,7 +29,7 @@ def configure_structlog() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    engine = create_async_engine(settings.database.url)
     app.state.async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
     yield
     await engine.dispose()

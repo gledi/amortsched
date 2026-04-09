@@ -1,5 +1,7 @@
 """JWT token service using python-jose."""
 
+import hashlib
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -11,12 +13,7 @@ from amortsched.core.errors import ExpiredTokenError, InvalidTokenError
 class JoseTokenService:
     """Creates and decodes JWT access tokens using python-jose."""
 
-    def __init__(
-        self,
-        secret_key: str,
-        algorithm: str = "HS256",
-        expire_minutes: int = 30,
-    ) -> None:
+    def __init__(self, secret_key: str, algorithm: str = "HS256", expire_minutes: int = 30) -> None:
         self._secret_key = secret_key
         self._algorithm = algorithm
         self._expire_minutes = expire_minutes
@@ -46,3 +43,9 @@ class JoseTokenService:
             return uuid.UUID(sub)
         except ValueError as exc:
             raise InvalidTokenError("Invalid subject in token") from exc
+
+    def create_refresh_token(self) -> str:
+        return secrets.token_urlsafe(32)
+
+    def hash_refresh_token(self, token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()

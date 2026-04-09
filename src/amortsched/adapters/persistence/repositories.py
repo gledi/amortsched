@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Any, Never, cast
 from uuid import UUID
 
@@ -11,6 +12,8 @@ from amortsched.adapters.persistence.mappers import (
     plan_to_values,
     profile_from_row,
     profile_to_values,
+    refresh_token_from_row,
+    refresh_token_to_values,
     schedule_from_row,
     schedule_to_values,
     user_from_row,
@@ -18,16 +21,17 @@ from amortsched.adapters.persistence.mappers import (
 )
 from amortsched.adapters.persistence.relationships import PlannedRelation, Relationship
 from amortsched.adapters.persistence.specifications import compile_specification
-from amortsched.adapters.persistence.tables import plans, profiles, schedules, users
-from amortsched.core.entities import Plan, Profile, Schedule, User
+from amortsched.adapters.persistence.tables import plans, profiles, refresh_tokens, schedules, users
+from amortsched.core.entities import Plan, Profile, RefreshToken, Schedule, User
 from amortsched.core.errors import (
     DuplicateEmailError,
     PlanNotFoundError,
     ProfileNotFoundError,
+    RefreshTokenNotFoundError,
     ScheduleNotFoundError,
     UserNotFoundError,
 )
-from amortsched.core.specifications import Rel, Specification
+from amortsched.core.specifications import Specification, With
 
 
 class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
@@ -54,14 +58,14 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
     }
 
     @staticmethod
-    def _build_plans_statement(user_ids: list[UUID], relation: Rel[Any]):
+    def _build_plans_statement(user_ids: list[UUID], relation: With[Any]):
         statement = sqlalchemy.select(plans).where(plans.c.user_id.in_(user_ids)).order_by(plans.c.created_at)
         if relation.spec is not None:
             statement = statement.where(compile_specification(plans, relation.spec))
         return statement
 
     @staticmethod
-    def _build_profiles_statement(user_ids: list[UUID], relation: Rel[Any]):
+    def _build_profiles_statement(user_ids: list[UUID], relation: With[Any]):
         statement = sqlalchemy.select(profiles).where(profiles.c.user_id.in_(user_ids))
         if relation.spec is not None:
             statement = statement.where(compile_specification(profiles, relation.spec))
@@ -97,8 +101,8 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
             raise UserNotFoundError(item.id)
         return item
 
-    async def save(self, item: User) -> User:
-        statement = build_postgres_upsert_statement(users, user_to_values(item), "id")
+    async def save(self, item: User, conflict_on: Sequence[str] = ("id",)) -> User:
+        statement = build_postgres_upsert_statement(users, user_to_values(item), conflict_on)
         try:
             await self._session.execute(statement)
         except IntegrityError as exc:
@@ -117,7 +121,7 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
             elif relation.relationship.key == "profile":
                 await self._load_profile(users_by_id, user_ids, relation.relation)
 
-    async def _load_plans(self, users_by_id: dict[UUID, User], user_ids: list[UUID], relation: Rel[Any]) -> None:
+    async def _load_plans(self, users_by_id: dict[UUID, User], user_ids: list[UUID], relation: With[Any]) -> None:
         statement = self._build_plans_statement(user_ids, relation)
         rows = (await self._session.execute(statement)).mappings().all()
 
@@ -130,7 +134,7 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
         for user_id, user in users_by_id.items():
             user.plans = plans_by_user.get(user_id, [])
 
-    async def _load_profile(self, users_by_id: dict[UUID, User], user_ids: list[UUID], relation: Rel[Any]) -> None:
+    async def _load_profile(self, users_by_id: dict[UUID, User], user_ids: list[UUID], relation: With[Any]) -> None:
         statement = self._build_profiles_statement(user_ids, relation)
         rows = (await self._session.execute(statement)).mappings().all()
 
@@ -172,7 +176,7 @@ class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
         return statement
 
     @staticmethod
-    def _build_schedules_statement(plan_ids: list[UUID], relation: Rel[Any]):
+    def _build_schedules_statement(plan_ids: list[UUID], relation: With[Any]):
         statement = (
             sqlalchemy.select(schedules).where(schedules.c.plan_id.in_(plan_ids)).order_by(schedules.c.generated_at)
         )
@@ -192,7 +196,7 @@ class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
             elif relation.relationship.key == "schedules":
                 await self._load_schedules(plans_by_id, plan_ids, relation.relation)
 
-    async def _load_users(self, plans_by_id: dict[UUID, Plan], relation: Rel[Any]) -> None:
+    async def _load_users(self, plans_by_id: dict[UUID, Plan], relation: With[Any]) -> None:
         user_ids = [plan.user_id for plan in plans_by_id.values()]
         statement = self._build_users_statement(user_ids, relation.spec)
         rows = (await self._session.execute(statement)).mappings().all()
@@ -205,7 +209,7 @@ class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
         self,
         plans_by_id: dict[UUID, Plan],
         plan_ids: list[UUID],
-        relation: Rel[Any],
+        relation: With[Any],
     ) -> None:
         statement = self._build_schedules_statement(plan_ids, relation)
         rows = (await self._session.execute(statement)).mappings().all()
@@ -295,3 +299,36 @@ class AsyncSqlAlchemyProfileRepository(BaseAsyncRepository[Profile]):
             for row in rows:
                 user = user_from_row(row)
                 profiles_by_user_id[user.id].user = user
+
+
+class AsyncSqlAlchemyRefreshTokenRepository(BaseAsyncRepository[RefreshToken]):
+    _table = refresh_tokens
+    _from_row = staticmethod(refresh_token_from_row)
+    _to_values = staticmethod(refresh_token_to_values)
+    _not_found_error = RefreshTokenNotFoundError
+    _relationships: dict[str, Relationship] = {}
+
+    async def get_by_token_hash(self, token_hash: str) -> RefreshToken | None:
+        statement = sqlalchemy.select(refresh_tokens).where(refresh_tokens.c.token_hash == token_hash)
+        row = (await self._session.execute(statement)).mappings().first()
+        if row is None:
+            return None
+        return refresh_token_from_row(row)
+
+    async def revoke_family(self, family_id: UUID) -> int:
+        statement = (
+            sqlalchemy.update(refresh_tokens)
+            .where(refresh_tokens.c.family_id == family_id)
+            .where(refresh_tokens.c.revoked_at.is_(None))
+            .values(revoked_at=sqlalchemy.func.now())
+        )
+        result = await self._session.execute(statement)
+        return result.rowcount
+
+    async def mark_used(self, token_id: UUID) -> None:
+        statement = (
+            sqlalchemy.update(refresh_tokens)
+            .where(refresh_tokens.c.id == token_id)
+            .values(used_at=sqlalchemy.func.now())
+        )
+        await self._session.execute(statement)

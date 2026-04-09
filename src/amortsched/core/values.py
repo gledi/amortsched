@@ -10,7 +10,7 @@ type TermType = int | tuple[int, int] | Term
 type InterestRate = float | Decimal
 
 
-_DAYS_IN_YEAR = Decimal("365")
+DAYS_IN_YEAR = Decimal("365")
 
 
 class Month(enum.IntEnum):

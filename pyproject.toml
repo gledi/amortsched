@@ -5,8 +5,9 @@ description = "Amortization schedule generator API"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-  "fastapi",
+  "fastapi[standard-no-fastapi-cloud-cli]",
   "uvicorn[standard]",
+  "python-multipart",
   "pydantic",
   "pydantic-settings",
   "sqlalchemy[asyncio]",
@@ -17,14 +18,23 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-  "ruff",
+test = [
   "pytest",
-  "pytest-asyncio",
+  "pytest-sugar",
+  "pytest-cov",
   "httpx",
-  "testcontainers[postgres]",
+  "faker",
   "factory-boy",
   "pytest-factoryboy",
+  "testcontainers",
+]
+lint = ["ruff"]
+dev = [
+  "debugpy",
+  "icecream",
+  "ipython",
+  { include-group = "lint" },
+  { include-group = "test" },
 ]
 
 [build-system]
@@ -33,6 +43,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/amortsched"]
+
+[tool.uv]
+exclude-newer = "1d"
+exclude-newer-package = { ruff = "3h" }
+default-groups = "all"
 
 [tool.ruff]
 line-length = 120

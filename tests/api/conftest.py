@@ -47,7 +47,7 @@ async def _register_and_get_token(client: httpx.AsyncClient, email: str = "test@
         json={"email": email, "name": "Test User", "password": "testpass123"},
     )
     assert resp.status_code == 201
-    return resp.json()["token"]
+    return resp.json()["access_token"]
 
 
 @pytest.fixture
