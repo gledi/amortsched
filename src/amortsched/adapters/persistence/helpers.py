@@ -9,13 +9,14 @@ from amortsched.core.pagination import LimitOffset, PageSize, Pagination
 _TOTAL_COUNT_LABEL = "_amortsched_total_count"
 
 
-def build_postgres_upsert_statement(table, values: dict[str, object], conflict_column_name: str):
+def build_postgres_upsert_statement(table, values: dict[str, object], conflict_columns: Sequence[str]):
     insert_statement = postgresql_insert(table).values(**values)
+    conflict_set = set(conflict_columns)
     update_values = {
-        column.name: insert_statement.excluded[column.name] for column in table.c if column.name != conflict_column_name
+        column.name: insert_statement.excluded[column.name] for column in table.c if column.name not in conflict_set
     }
     return insert_statement.on_conflict_do_update(
-        index_elements=[table.c[conflict_column_name]],
+        index_elements=[table.c[name] for name in conflict_columns],
         set_=update_values,
     )
 
