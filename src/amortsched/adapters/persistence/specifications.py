@@ -26,9 +26,9 @@ from amortsched.core.specifications import (
     Lt,
     Not,
     Or,
-    Rel,
     Specification,
     StartsWith,
+    With,
 )
 
 
@@ -155,15 +155,15 @@ def _(spec: Not, table: Table) -> ColumnElement[bool]:
 
 
 @_compile_specification.register
-def _(spec: Rel, table: Table) -> ColumnElement[bool]:
+def _(spec: With, table: Table) -> ColumnElement[bool]:
     del spec, table
     raise ValueError("Rel specifications must be extracted before compilation")
 
 
-def extract_relations(spec: Specification[Any] | None) -> tuple[Specification[Any] | None, list[Rel[Any]]]:
+def extract_relations(spec: Specification[Any] | None) -> tuple[Specification[Any] | None, list[With[Any]]]:
     if spec is None:
         return None, []
-    if isinstance(spec, Rel):
+    if isinstance(spec, With):
         _validate_relation_spec(spec)
         return None, [spec]
     if isinstance(spec, And):
@@ -200,7 +200,7 @@ def _raise_if_contains_relation(spec: Specification[Any], context: str) -> None:
         )
 
 
-def _validate_relation_spec(spec: Rel[Any]) -> None:
+def _validate_relation_spec(spec: With[Any]) -> None:
     if spec.spec is not None and _contains_relation(spec.spec):
         raise ValueError(
             "Nested relation loading is not supported by the SQLAlchemy adapter; "
@@ -209,7 +209,7 @@ def _validate_relation_spec(spec: Rel[Any]) -> None:
 
 
 def _contains_relation(spec: Specification[Any]) -> bool:
-    if isinstance(spec, Rel):
+    if isinstance(spec, With):
         return True
     if isinstance(spec, And | Or):
         return _contains_relation(spec.left) or _contains_relation(spec.right)

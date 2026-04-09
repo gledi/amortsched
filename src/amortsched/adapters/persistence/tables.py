@@ -64,3 +64,16 @@ schedules = sqlalchemy.Table(
     Column("generated_at", sqlalchemy.DateTime(timezone=True), nullable=False),
     Column("is_deleted", sqlalchemy.Boolean, nullable=False),
 )
+
+refresh_tokens = sqlalchemy.Table(
+    "refresh_tokens",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("user_id", UUID(as_uuid=True), sqlalchemy.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("token_hash", sqlalchemy.String(128), nullable=False, unique=True, index=True),
+    Column("family_id", UUID(as_uuid=True), nullable=False, index=True),
+    Column("expires_at", sqlalchemy.DateTime(timezone=True), nullable=False),
+    Column("used_at", sqlalchemy.DateTime(timezone=True), nullable=True),
+    Column("revoked_at", sqlalchemy.DateTime(timezone=True), nullable=True),
+    Column("created_at", sqlalchemy.DateTime(timezone=True), nullable=False, server_default=sqlalchemy.func.now()),
+)

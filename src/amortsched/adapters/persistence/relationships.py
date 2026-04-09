@@ -5,9 +5,9 @@ from typing import Any
 from sqlalchemy.sql.schema import Column, Table
 
 from amortsched.core.entities import Entity
-from amortsched.core.specifications import Rel
+from amortsched.core.specifications import With
 
-type PartitionedRelations = tuple[Sequence[Rel[Entity]], Sequence[Rel[Entity]]]
+type PartitionedRelations = tuple[Sequence[With[Entity]], Sequence[With[Entity]]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,7 +22,7 @@ class Relationship:
 
 @dataclass(frozen=True, slots=True)
 class PlannedRelation:
-    relation: Rel[Entity]
+    relation: With[Entity]
     relationship: Relationship
 
 
@@ -32,7 +32,7 @@ class RelationshipPlan:
     select_ins: list[PlannedRelation]
 
 
-def plan_relations(config: dict[str, Relationship], relations: Sequence[Rel[Entity]]) -> RelationshipPlan:
+def plan_relations(config: dict[str, Relationship], relations: Sequence[With[Entity]]) -> RelationshipPlan:
     joins: list[PlannedRelation] = []
     select_ins: list[PlannedRelation] = []
 
@@ -49,6 +49,6 @@ def plan_relations(config: dict[str, Relationship], relations: Sequence[Rel[Enti
     return RelationshipPlan(joins=joins, select_ins=select_ins)
 
 
-def partition_relations(config: dict[str, Relationship], relations: Sequence[Rel[Entity]]) -> PartitionedRelations:
+def partition_relations(config: dict[str, Relationship], relations: Sequence[With[Entity]]) -> PartitionedRelations:
     plan = plan_relations(config, relations)
     return [item.relation for item in plan.joins], [item.relation for item in plan.select_ins]

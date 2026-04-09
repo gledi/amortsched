@@ -4,7 +4,6 @@ from uuid import UUID
 
 import sqlalchemy
 import sqlalchemy.ext.asyncio
-import sqlalchemy.orm
 from sqlalchemy.sql.schema import Table
 
 from amortsched.adapters.persistence.helpers import (
