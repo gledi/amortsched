@@ -10,6 +10,8 @@ from amortsched.core.errors import (
     InvalidTokenError,
     NotFoundError,
     PlanOwnershipError,
+    RefreshTokenNotFoundError,
+    RefreshTokenReplayError,
     ValidationError,
 )
 
@@ -19,6 +21,8 @@ _ERROR_MAP: list[tuple[type[DomainError], int, str, str]] = [
     (ValidationError, 422, "/errors/validation-error", "Validation Error"),
     (ExpiredTokenError, 401, "/errors/token-expired", "Token Expired"),
     (InvalidTokenError, 401, "/errors/invalid-token", "Invalid Token"),
+    (RefreshTokenReplayError, 401, "/errors/token-replay", "Token Replay Detected"),
+    (RefreshTokenNotFoundError, 401, "/errors/invalid-refresh-token", "Invalid Refresh Token"),
     (AuthenticationError, 401, "/errors/authentication-failed", "Authentication Failed"),
     (PlanOwnershipError, 403, "/errors/forbidden", "Forbidden"),
     (NotFoundError, 404, "/errors/not-found", "Not Found"),

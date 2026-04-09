@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     secret_key: str = "amortsched-dev-secret-key-change-in-production"
     token_expiration_minutes: int = 30
     debug: bool = False
+    refresh_token_expiration_days: int = 7
 
 
 @lru_cache

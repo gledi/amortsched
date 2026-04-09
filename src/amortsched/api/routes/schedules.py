@@ -1,30 +1,18 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 
 from amortsched.api.dependencies import (
-    get_current_user_id,
-    get_delete_schedule_handler,
-    get_generate_schedule_handler,
-    get_get_schedule_handler,
-    get_list_schedules_handler,
-    get_save_schedule_handler,
+    CurrentUserId,
+    DeleteSchedule,
+    GenerateSchedule,
+    GetSchedule,
+    ListSchedules,
+    SaveSchedule,
 )
 from amortsched.api.schemas.schedules import ScheduleResponse
-from amortsched.app.commands.plans import (
-    DeleteScheduleCommand,
-    DeleteScheduleHandler,
-    SaveScheduleCommand,
-    SaveScheduleHandler,
-)
-from amortsched.app.queries.schedules import (
-    GenerateScheduleHandler,
-    GenerateScheduleQuery,
-    GetScheduleHandler,
-    GetScheduleQuery,
-    ListSchedulesHandler,
-    ListSchedulesQuery,
-)
+from amortsched.app.commands.plans import DeleteScheduleCommand, SaveScheduleCommand
+from amortsched.app.queries.schedules import GenerateScheduleQuery, GetScheduleQuery, ListSchedulesQuery
 
 router = APIRouter(prefix="/api/plans/{plan_id}/schedules", tags=["schedules"])
 
@@ -32,8 +20,8 @@ router = APIRouter(prefix="/api/plans/{plan_id}/schedules", tags=["schedules"])
 @router.post("", response_model=ScheduleResponse, status_code=status.HTTP_201_CREATED)
 async def generate_schedule(
     plan_id: uuid.UUID,
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    handler: GenerateScheduleHandler = Depends(get_generate_schedule_handler),
+    user_id: CurrentUserId,
+    handler: GenerateSchedule,
 ) -> ScheduleResponse:
     schedule = await handler.handle(GenerateScheduleQuery(plan_id=plan_id, user_id=user_id))
     return ScheduleResponse.from_entity(schedule)
@@ -42,8 +30,8 @@ async def generate_schedule(
 @router.get("", response_model=list[ScheduleResponse])
 async def list_schedules(
     plan_id: uuid.UUID,
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    handler: ListSchedulesHandler = Depends(get_list_schedules_handler),
+    user_id: CurrentUserId,
+    handler: ListSchedules,
 ) -> list[ScheduleResponse]:
     schedules = await handler.handle(ListSchedulesQuery(plan_id=plan_id, user_id=user_id))
     return [ScheduleResponse.from_entity(s) for s in schedules]
@@ -53,8 +41,8 @@ async def list_schedules(
 async def get_schedule(
     plan_id: uuid.UUID,
     schedule_id: uuid.UUID,
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    handler: GetScheduleHandler = Depends(get_get_schedule_handler),
+    user_id: CurrentUserId,
+    handler: GetSchedule,
 ) -> ScheduleResponse:
     schedule = await handler.handle(GetScheduleQuery(schedule_id=schedule_id, user_id=user_id))
     return ScheduleResponse.from_entity(schedule)
@@ -64,8 +52,8 @@ async def get_schedule(
 async def save_schedule(
     plan_id: uuid.UUID,
     schedule_id: uuid.UUID,
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    handler: SaveScheduleHandler = Depends(get_save_schedule_handler),
+    user_id: CurrentUserId,
+    handler: SaveSchedule,
 ) -> ScheduleResponse:
     schedule = await handler.handle(SaveScheduleCommand(plan_id=plan_id, user_id=user_id))
     return ScheduleResponse.from_entity(schedule)
@@ -75,7 +63,7 @@ async def save_schedule(
 async def delete_schedule(
     plan_id: uuid.UUID,
     schedule_id: uuid.UUID,
-    user_id: uuid.UUID = Depends(get_current_user_id),
-    handler: DeleteScheduleHandler = Depends(get_delete_schedule_handler),
+    user_id: CurrentUserId,
+    handler: DeleteSchedule,
 ) -> None:
     await handler.handle(DeleteScheduleCommand(schedule_id=schedule_id, user_id=user_id))
