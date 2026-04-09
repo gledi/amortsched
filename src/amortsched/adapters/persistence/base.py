@@ -168,8 +168,8 @@ class AsyncRepository[T: Entity](BaseRepository[T]):
             raise self._not_found_error(item.id)
         return item
 
-    async def save(self, item: T) -> T:
-        statement = build_postgres_upsert_statement(self._table, self._to_values(item), "id")
+    async def save(self, item: T, conflict_on: Sequence[str] = ("id",)) -> T:
+        statement = build_postgres_upsert_statement(self._table, self._to_values(item), conflict_on)
         await self._session.execute(statement)
         return item
 
