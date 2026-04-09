@@ -14,6 +14,7 @@ dependencies = [
   "alembic",
   "structlog",
   "python-jose[cryptography]",
+  "python-multipart>=0.0.24",
 ]
 
 [dependency-groups]

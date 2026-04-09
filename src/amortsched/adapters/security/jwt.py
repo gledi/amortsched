@@ -1,5 +1,7 @@
 """JWT token service using python-jose."""
 
+import hashlib
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -46,3 +48,9 @@ class JoseTokenService:
             return uuid.UUID(sub)
         except ValueError as exc:
             raise InvalidTokenError("Invalid subject in token") from exc
+
+    def create_refresh_token(self) -> str:
+        return secrets.token_urlsafe(32)
+
+    def hash_refresh_token(self, token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()

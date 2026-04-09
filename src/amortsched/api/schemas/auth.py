@@ -9,11 +9,6 @@ class RegisterRequest(BaseModel):
     password: str
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
@@ -23,4 +18,16 @@ class UserResponse(BaseModel):
 
 class AuthResponse(BaseModel):
     user: UserResponse
-    token: str
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

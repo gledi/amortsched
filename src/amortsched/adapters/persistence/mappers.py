@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from decimal import Decimal
 from typing import Any, cast
 
-from amortsched.core.entities import Plan, Profile, Schedule, User
+from amortsched.core.entities import Plan, Profile, RefreshToken, Schedule, User
 from amortsched.core.values import (
     Balance,
     EarlyPaymentFees,
@@ -152,6 +152,32 @@ def schedule_from_row(row: RowLike) -> Schedule:
     )
 
 
+def refresh_token_to_values(token: RefreshToken) -> dict[str, object]:
+    return {
+        "id": token.id,
+        "user_id": token.user_id,
+        "token_hash": token.token_hash,
+        "family_id": token.family_id,
+        "expires_at": token.expires_at,
+        "used_at": token.used_at,
+        "revoked_at": token.revoked_at,
+        "created_at": token.created_at,
+    }
+
+
+def refresh_token_from_row(row: RowLike) -> RefreshToken:
+    return RefreshToken(
+        id=_row_value(row, "id"),
+        user_id=_row_value(row, "user_id"),
+        token_hash=_row_value(row, "token_hash"),
+        family_id=_row_value(row, "family_id"),
+        expires_at=_row_value(row, "expires_at"),
+        used_at=_row_value(row, "used_at"),
+        revoked_at=_row_value(row, "revoked_at"),
+        created_at=_row_value(row, "created_at"),
+    )
+
+
 def _row_value(row: RowLike, key: str) -> Any:
     if isinstance(row, Mapping):
         return row[key]
@@ -291,6 +317,8 @@ __all__ = [
     "plan_to_values",
     "profile_from_row",
     "profile_to_values",
+    "refresh_token_from_row",
+    "refresh_token_to_values",
     "schedule_from_row",
     "schedule_to_values",
     "user_from_row",

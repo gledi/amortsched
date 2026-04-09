@@ -1,0 +1,76 @@
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "3000:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  api:
+    build:
+      context: .
+      target: dev
+    command: uvicorn amortsched.api.app:app --reload --host 0.0.0.0 --port 8000
+    volumes:
+      - ./src:/app/src
+    environment:
+      DATABASE_URL: postgresql+psycopg://amortsched:amortsched@db:5432/amortsched
+      SECRET_KEY: dev-secret-key-change-in-production
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: ui
+      target: dev
+    volumes:
+      - ./ui/src:/app/src
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ui.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.ui.entrypoints=web"
+      - "traefik.http.routers.ui.priority=1"
+      - "traefik.http.services.ui.loadbalancer.server.port=5173"
+
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: amortsched
+      POSTGRES_PASSWORD: amortsched
+      POSTGRES_DB: amortsched
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/18/docker
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amortsched"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  cache:
+    image: redis:8.6-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

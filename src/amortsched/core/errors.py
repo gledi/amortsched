@@ -180,6 +180,16 @@ class ExpiredTokenError(InvalidTokenError):
         super().__init__("Token has expired")
 
 
+class RefreshTokenNotFoundError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("Refresh token not found or expired")
+
+
+class RefreshTokenReplayError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("Refresh token has already been used")
+
+
 class ValidationError(DomainError):
     """Raised when input data fails validation."""
 

@@ -28,11 +28,17 @@ htmlcov/
 *.swo
 
 # AI agent artifacts
+.agents/
 .opencode/
 .claude/
 .superpowers/
 AGENTS.md
 CLAUDE.md
+skills-lock.json
 
 # git worktrees
 .worktrees/
+
+# Node / Frontend
+node_modules/
+ui/dist/
