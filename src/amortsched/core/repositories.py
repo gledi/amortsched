@@ -1,6 +1,9 @@
 import uuid
 from collections.abc import AsyncIterator, Sequence
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from .entities import RefreshToken
 
 from .pagination import Paginated, Pagination
 from .specifications import Specification
@@ -44,7 +47,7 @@ class AddAsyncRepository[T](Protocol):
 class UpdateAsyncRepository[T](Protocol):
     async def update(self, item: T) -> T: ...
 
-    async def save(self, item: T) -> T: ...
+    async def save(self, item: T, conflict_on: Sequence[str] = ("id",)) -> T: ...
 
 
 class DeleteAsyncRepository[T](Protocol):
@@ -61,6 +64,12 @@ class AsyncRepository[T](ReadAsyncRepository[T], WriteAsyncRepository[T], Protoc
     pass
 
 
+class RefreshTokenRepository(AsyncRepository["RefreshToken"], Protocol):
+    async def get_by_token_hash(self, token_hash: str) -> "RefreshToken | None": ...
+    async def revoke_family(self, family_id: uuid.UUID) -> int: ...
+    async def mark_used(self, token_id: uuid.UUID) -> None: ...
+
+
 class BulkAddAsyncRepository[T](Protocol):
     async def bulk_add(self, items: Sequence[T]) -> Sequence[T]: ...
 
@@ -68,7 +77,7 @@ class BulkAddAsyncRepository[T](Protocol):
 class BulkUpdateAsyncRepository[T](Protocol):
     async def bulk_update(self, items: Sequence[T]) -> Sequence[T]: ...
 
-    async def bulk_save(self, items: Sequence[T]) -> Sequence[T]: ...
+    async def bulk_save(self, items: Sequence[T], conflict_on: Sequence[str] = ("id",)) -> Sequence[T]: ...
 
 
 class BulkAsyncRepository[T](BulkAddAsyncRepository[T], BulkUpdateAsyncRepository[T], Protocol):
