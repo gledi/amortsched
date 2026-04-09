@@ -1,27 +1,18 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from amortsched.api.dependencies import (
-    get_current_user_id,
-    get_get_profile_handler,
-    get_get_user_handler,
-    get_upsert_profile_handler,
-)
+from amortsched.api.dependencies import CurrentUserId, GetProfile, GetUser, UpsertProfile
 from amortsched.api.schemas.auth import UserResponse
 from amortsched.api.schemas.users import ProfileResponse, UpsertProfileRequest
-from amortsched.app.commands.users import UpsertProfileCommand, UpsertProfileHandler
-from amortsched.app.queries.users import GetProfileHandler, GetProfileQuery, GetUserHandler, GetUserQuery
+from amortsched.app.commands.users import UpsertProfileCommand
+from amortsched.app.queries.users import GetProfileQuery, GetUserQuery
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(
-    user_id: uuid.UUID,
-    handler: GetUserHandler = Depends(get_get_user_handler),
-    _current_user_id: uuid.UUID = Depends(get_current_user_id),
-) -> UserResponse:
+async def get_user(user_id: uuid.UUID, handler: GetUser, _current_user_id: CurrentUserId) -> UserResponse:
     user = await handler.handle(GetUserQuery(user_id=user_id))
     return UserResponse(id=user.id, email=user.email, name=user.name, is_active=user.is_active)
 
@@ -29,8 +20,8 @@ async def get_user(
 @router.get("/{user_id}/profile", response_model=ProfileResponse)
 async def get_profile(
     user_id: uuid.UUID,
-    handler: GetProfileHandler = Depends(get_get_profile_handler),
-    _current_user_id: uuid.UUID = Depends(get_current_user_id),
+    handler: GetProfile,
+    _current_user_id: CurrentUserId,
 ) -> ProfileResponse:
     profile = await handler.handle(GetProfileQuery(user_id=user_id))
     return ProfileResponse(
@@ -49,8 +40,8 @@ async def get_profile(
 async def upsert_profile(
     user_id: uuid.UUID,
     body: UpsertProfileRequest,
-    handler: UpsertProfileHandler = Depends(get_upsert_profile_handler),
-    _current_user_id: uuid.UUID = Depends(get_current_user_id),
+    handler: UpsertProfile,
+    _current_user_id: CurrentUserId,
 ) -> ProfileResponse:
     command = UpsertProfileCommand(
         user_id=user_id,

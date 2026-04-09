@@ -60,6 +60,18 @@ class Schedule:
 
 
 @dataclass(kw_only=True, slots=True)
+class RefreshToken:
+    id: uuid.UUID = field(default_factory=uuid.uuid7)
+    user_id: uuid.UUID
+    token_hash: str
+    family_id: uuid.UUID
+    expires_at: datetime.datetime
+    used_at: datetime.datetime | None = None
+    revoked_at: datetime.datetime | None = None
+    created_at: datetime.datetime = field(default_factory=now)
+
+
+@dataclass(kw_only=True, slots=True)
 class Plan:
     class Status(enum.StrEnum):
         Draft = "draft"

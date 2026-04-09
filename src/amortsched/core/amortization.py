@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from amortsched.core.errors import AmortizationError, InvalidExtraPaymentError, InvalidRecurringPaymentError
 from amortsched.core.values import (
-    _DAYS_IN_YEAR,
+    DAYS_IN_YEAR,
     Amount,
     Balance,
     EarlyPaymentFees,
@@ -132,7 +132,7 @@ class AmortizationSchedule:
     def _daily_rate_for_date(self, dt: datetime.date) -> Decimal:
         yearly_percent = self._yearly_rate_percent_for_date(dt)
         yearly_fraction = yearly_percent / Decimal("100.00")
-        return yearly_fraction / _DAYS_IN_YEAR
+        return yearly_fraction / DAYS_IN_YEAR
 
     def _daily_rate_for_date_with_application_limit(
         self,
@@ -151,7 +151,7 @@ class AmortizationSchedule:
         effective_dt = dt if dt <= last_day_of_scheduled_month else last_day_of_scheduled_month
         yearly_percent = self._yearly_rate_percent_for_date(effective_dt)
         yearly_fraction = yearly_percent / Decimal("100.00")
-        return yearly_fraction / _DAYS_IN_YEAR
+        return yearly_fraction / DAYS_IN_YEAR
 
     def _extras_for_period(
         self,
