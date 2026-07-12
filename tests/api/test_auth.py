@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_register(client):
     resp = await client.post(
         "/api/auth/register",
@@ -15,7 +15,7 @@ async def test_register(client):
     assert data["user"]["email"] == "user@example.com"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_login(client, register_user):
     await register_user(client, "login@example.com")
     resp = await client.post(
@@ -29,7 +29,7 @@ async def test_login(client, register_user):
     assert data["token_type"] == "bearer"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_login_wrong_password(client, register_user):
     await register_user(client, "wrong@example.com")
     resp = await client.post(
@@ -39,7 +39,7 @@ async def test_login_wrong_password(client, register_user):
     assert resp.status_code == 401
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_duplicate_email(client, register_user):
     await register_user(client, "dup@example.com")
     resp = await client.post(
@@ -49,7 +49,7 @@ async def test_duplicate_email(client, register_user):
     assert resp.status_code == 409
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_refresh_token(client, register_user):
     await register_user(client, "refresh@example.com")
     login_resp = await client.post(
@@ -66,7 +66,7 @@ async def test_refresh_token(client, register_user):
     assert data["refresh_token"] != refresh_token
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_refresh_token_rotation_invalidates_old(client, register_user):
     await register_user(client, "rotate@example.com")
     login_resp = await client.post(
@@ -82,7 +82,7 @@ async def test_refresh_token_rotation_invalidates_old(client, register_user):
     assert resp.status_code == 401
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_refresh_token_replay_revokes_family(client, register_user):
     await register_user(client, "replay@example.com")
     login_resp = await client.post(
@@ -101,7 +101,7 @@ async def test_refresh_token_replay_revokes_family(client, register_user):
     assert resp.status_code == 401
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_logout(client, register_user):
     await register_user(client, "logout@example.com")
     login_resp = await client.post(
@@ -117,7 +117,7 @@ async def test_logout(client, register_user):
     assert resp.status_code == 401
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_refresh_with_invalid_token(client):
     resp = await client.post("/api/auth/refresh", json={"refresh_token": "invalid-token"})
     assert resp.status_code == 401

@@ -136,7 +136,7 @@ class RefreshTokensHandler:
             user_id=existing.user_id,
             token_hash=self._token_service.hash_refresh_token(raw_token),
             family_id=existing.family_id,
-            expires_at=now() + datetime.timedelta(days=self._settings.refresh_token_expiration_days),
+            expires_at=now() + datetime.timedelta(days=self._settings.security.refresh_token_expiration_days),
         )
         await self._refresh_token_repo.add(new_token)
 
@@ -187,7 +187,7 @@ class CreateRefreshTokenHandler:
             user_id=command.user_id,
             token_hash=self._token_service.hash_refresh_token(raw_token),
             family_id=uuid.uuid4(),
-            expires_at=now() + datetime.timedelta(days=self._settings.refresh_token_expiration_days),
+            expires_at=now() + datetime.timedelta(days=self._settings.security.refresh_token_expiration_days),
         )
         await self._refresh_token_repo.add(token)
         return raw_token

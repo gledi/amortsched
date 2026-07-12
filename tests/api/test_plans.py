@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_create_plan(client, auth_headers):
     resp = await client.post(
         "/api/plans",
@@ -19,7 +19,7 @@ async def test_create_plan(client, auth_headers):
     assert data["status"] == "draft"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_list_plans(client, auth_headers):
     await client.post(
         "/api/plans",
@@ -32,7 +32,7 @@ async def test_list_plans(client, auth_headers):
     assert len(data) >= 1
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_get_plan(client, auth_headers):
     create_resp = await client.post(
         "/api/plans",
@@ -45,7 +45,7 @@ async def test_get_plan(client, auth_headers):
     assert resp.json()["id"] == plan_id
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_delete_plan(client, auth_headers):
     create_resp = await client.post(
         "/api/plans",

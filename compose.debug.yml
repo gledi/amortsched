@@ -1,0 +1,9 @@
+# Debug override: run the API under debugpy so a client can attach on :5678.
+# Load explicitly alongside compose.yml, e.g. `make up/debug`.
+# --reload is dropped: the reloader runs the app in a child process the debugger
+# would not follow (breakpoints would miss). Restart the container to pick up changes.
+services:
+  api:
+    command: python -m debugpy --listen 0.0.0.0:5678 -m uvicorn amortsched.api.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "5678:5678"

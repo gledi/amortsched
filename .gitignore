@@ -28,14 +28,7 @@ htmlcov/
 *.swo
 
 # AI agent artifacts
-.agents/
-.opencode/
-.claude/
-.superpowers/
-AGENTS.md
-CLAUDE.md
-skills-lock.json
-.serena/
+.claude/settings.local.json
 
 # git worktrees
 .worktrees/

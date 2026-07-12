@@ -3,7 +3,7 @@ name = "amortsched"
 version = "0.1.0"
 description = "Amortization schedule generator API"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.14,<4.0"
 dependencies = [
   "fastapi[standard-no-fastapi-cloud-cli]",
   "uvicorn[standard]",
@@ -17,9 +17,13 @@ dependencies = [
   "python-jose[cryptography]",
 ]
 
+[project.optional-dependencies]
+prod = ["gunicorn", "uvicorn-worker"]
+
 [dependency-groups]
 test = [
   "pytest",
+  "anyio",
   "pytest-sugar",
   "pytest-cov",
   "httpx",
@@ -45,8 +49,8 @@ build-backend = "hatchling.build"
 packages = ["src/amortsched"]
 
 [tool.uv]
-exclude-newer = "1d"
-exclude-newer-package = { ruff = "3h" }
+exclude-newer = "3 days"
+exclude-newer-package = { ruff = "1 day" }
 default-groups = "all"
 
 [tool.ruff]
@@ -58,8 +62,14 @@ ignore = ["B008"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
-asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["amortsched"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.pyright]
 reportMissingImports = false

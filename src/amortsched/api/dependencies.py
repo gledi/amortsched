@@ -71,8 +71,8 @@ credentials_exception = HTTPException(
 
 def get_token_service(settings: AppSettings) -> JoseTokenService:
     return JoseTokenService(
-        secret_key=settings.secret_key,
-        expire_minutes=settings.token_expiration_minutes,
+        secret_key=settings.security.secret_key,
+        expire_minutes=settings.security.token_expiration_minutes,
     )
 
 
