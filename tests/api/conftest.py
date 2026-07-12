@@ -21,7 +21,8 @@ def database_url(postgres):
 
 @pytest.fixture
 async def client(database_url, monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("DATABASE__DSN", database_url)
+    monkeypatch.setenv("SECURITY__SECRET_KEY", "test-secret-key")
     get_settings.cache_clear()
 
     async_url = database_url.replace("+psycopg://", "+psycopg_async://")

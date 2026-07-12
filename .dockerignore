@@ -1,6 +1,8 @@
 .venv
 ui
 .git
+.env
+tests
 __pycache__
 *.pyc
 .ruff_cache

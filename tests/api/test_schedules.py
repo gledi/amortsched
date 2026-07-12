@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_generate_schedule(client, auth_headers):
     create_resp = await client.post(
         "/api/plans",

@@ -6,17 +6,27 @@ from amortsched.core.entities import Plan, Profile, Schedule, User
 from amortsched.core.repositories import AsyncRepository
 
 
-class Settings(Protocol):
+class SecuritySettings(Protocol):
     @property
     def secret_key(self) -> str: ...
     @property
     def token_expiration_minutes(self) -> int: ...
     @property
-    def database_url(self) -> str: ...
+    def refresh_token_expiration_days(self) -> int: ...
+
+
+class DatabaseSettings(Protocol):
+    @property
+    def url(self) -> str: ...
+
+
+class Settings(Protocol):
+    @property
+    def security(self) -> SecuritySettings: ...
+    @property
+    def database(self) -> DatabaseSettings: ...
     @property
     def debug(self) -> bool: ...
-    @property
-    def refresh_token_expiration_days(self) -> int: ...
 
 
 class TokenService(Protocol):
