@@ -14,7 +14,7 @@ from amortsched.adapters.persistence.repositories import (
     AsyncSqlAlchemyUserRepository,
 )
 from amortsched.adapters.security.hashers import PBKDF2PasswordHasher
-from amortsched.adapters.security.jwt import JoseTokenService
+from amortsched.adapters.security.jwt import JwtTokenService
 from amortsched.api.config import get_settings
 from amortsched.app.commands.plans import (
     AddInterestRateChangeHandler,
@@ -69,8 +69,8 @@ credentials_exception = HTTPException(
 )
 
 
-def get_token_service(settings: AppSettings) -> JoseTokenService:
-    return JoseTokenService(
+def get_token_service(settings: AppSettings) -> JwtTokenService:
+    return JwtTokenService(
         secret_key=settings.security.secret_key,
         expire_minutes=settings.security.token_expiration_minutes,
     )
@@ -78,7 +78,7 @@ def get_token_service(settings: AppSettings) -> JoseTokenService:
 
 async def get_current_user_id(
     token: Annotated[str, Depends(oauth2_scheme)],
-    token_service: JoseTokenService = Depends(get_token_service),
+    token_service: JwtTokenService = Depends(get_token_service),
 ) -> uuid.UUID:
     try:
         return token_service.decode_access_token(token)
@@ -87,7 +87,7 @@ async def get_current_user_id(
 
 
 CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]
-TokenSvc = Annotated[JoseTokenService, Depends(get_token_service)]
+TokenSvc = Annotated[JwtTokenService, Depends(get_token_service)]
 
 
 def get_user_repo(session: DbSession) -> AsyncSqlAlchemyUserRepository:

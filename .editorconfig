@@ -11,7 +11,7 @@ insert_final_newline = true
 [*.py]
 max_line_length = 120
 
-[*.{css,js,json,yml,yaml,toml}]
+[*.{css,json,yml,yaml,toml,js,jsx,ts,tsx}]
 indent_size = 2
 
 [*.html]

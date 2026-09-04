@@ -1,4 +1,4 @@
-import httpx
+import httpx2 as httpx
 import pytest
 from sqlalchemy import create_engine as create_sync_engine
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -22,7 +22,7 @@ def database_url(postgres):
 @pytest.fixture
 async def client(database_url, monkeypatch):
     monkeypatch.setenv("DATABASE__DSN", database_url)
-    monkeypatch.setenv("SECURITY__SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("SECURITY__SECRET_KEY", "test-secret-key-that-is-long-enough-for-hs256")
     get_settings.cache_clear()
 
     async_url = database_url.replace("+psycopg://", "+psycopg_async://")

@@ -1,9 +1,8 @@
 {
-    "python.testing.pytestArgs": [
-        "libs/core/tests",
-        "libs/app/tests",
-        "libs/data-inmemory/tests"
-    ],
-    "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+  "python.analysis.typeCheckingMode": "off",
+  "python.languageServer": "Pylance",
+  "basedpyright.disableLanguageServices": true,
+  "python.testing.pytestArgs": ["tests"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }

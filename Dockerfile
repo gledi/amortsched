@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-ARG PYTHON_VERSION=3.14
-ARG UV_VERSION=0.11.31
+ARG PYTHON_VERSION=3.14.7
+ARG UV_VERSION=0.12.9
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION}-python${PYTHON_VERSION}-trixie-slim AS deps
 
@@ -42,9 +42,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:${PATH}"
 
-RUN useradd --system --user-group --no-create-home --shell /sbin/nologin appuser
+RUN useradd --system --user-group --no-create-home --shell /sbin/nologin amortsched
 
-USER appuser
+USER amortsched
 
 WORKDIR /app
 

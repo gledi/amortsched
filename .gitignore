@@ -7,6 +7,7 @@ dist/
 build/
 *.egg
 .venv/
+src/amortsched/_version.py
 
 # Environment
 .envrc

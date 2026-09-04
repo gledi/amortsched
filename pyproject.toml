@@ -1,6 +1,6 @@
 [project]
 name = "amortsched"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Amortization schedule generator API"
 readme = "README.md"
 requires-python = ">=3.14,<4.0"
@@ -14,7 +14,7 @@ dependencies = [
   "psycopg[binary]",
   "alembic",
   "structlog",
-  "python-jose[cryptography]",
+  "pyjwt",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +26,7 @@ test = [
   "anyio",
   "pytest-sugar",
   "pytest-cov",
-  "httpx",
+  "httpx2",
   "faker",
   "factory-boy",
   "pytest-factoryboy",
@@ -42,16 +42,28 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/amortsched"]
+
+[tool.hatch.build.hooks.version]
+path = "src/amortsched/_version.py"
+template = '''version = "{version}"
+'''
 
 [tool.uv]
 exclude-newer = "1 week"
 exclude-newer-package = { ruff = "1 day" }
 default-groups = "all"
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.uv-dynamic-versioning]
+fallback-version = "0.0.0"
 
 [tool.ruff]
 line-length = 120
@@ -61,7 +73,7 @@ select = ["E", "F", "W", "C90", "B", "I"]
 ignore = ["B008"]
 
 [tool.pytest.ini_options]
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib --verbose --color=yes --tb=short --maxfail=5"
 testpaths = ["tests"]
 
 [tool.coverage.run]
@@ -71,7 +83,18 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 
-[tool.pyright]
+[tool.basedpyright]
+pythonVersion = "3.14"
+pythonPlatform = "Linux"
+include = ["src"]
+extraPaths = ["src"]
 reportMissingImports = false
 reportMissingTypeStubs = false
-extraPaths = ["src"]
+reportAny = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportMissingParameterType = false
+reportUnannotatedClassAttribute = false
+reportCallInDefaultInitializer = false

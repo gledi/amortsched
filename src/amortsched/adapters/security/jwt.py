@@ -1,17 +1,17 @@
-"""JWT token service using python-jose."""
+"""JWT token service using PyJWT."""
 
 import hashlib
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from jose import ExpiredSignatureError, JWTError, jwt
+import jwt
 
 from amortsched.core.errors import ExpiredTokenError, InvalidTokenError
 
 
-class JoseTokenService:
-    """Creates and decodes JWT access tokens using python-jose."""
+class JwtTokenService:
+    """Creates and decodes JWT access tokens using PyJWT."""
 
     def __init__(self, secret_key: str, algorithm: str = "HS256", expire_minutes: int = 30) -> None:
         self._secret_key = secret_key
@@ -30,9 +30,9 @@ class JoseTokenService:
     def decode_access_token(self, token: str) -> uuid.UUID:
         try:
             payload = jwt.decode(token, self._secret_key, algorithms=[self._algorithm])
-        except ExpiredSignatureError as exc:
+        except jwt.ExpiredSignatureError as exc:
             raise ExpiredTokenError() from exc
-        except JWTError as exc:
+        except jwt.PyJWTError as exc:
             raise InvalidTokenError(str(exc)) from exc
 
         sub = payload.get("sub")
