@@ -39,7 +39,7 @@ async def list_schedules(
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
 async def get_schedule(
-    plan_id: uuid.UUID,
+    plan_id: uuid.UUID,  # pyright: ignore[reportUnusedParameter]
     schedule_id: uuid.UUID,
     user_id: CurrentUserId,
     handler: GetSchedule,
@@ -51,7 +51,7 @@ async def get_schedule(
 @router.post("/{schedule_id}/save", response_model=ScheduleResponse)
 async def save_schedule(
     plan_id: uuid.UUID,
-    schedule_id: uuid.UUID,
+    schedule_id: uuid.UUID,  # pyright: ignore[reportUnusedParameter]
     user_id: CurrentUserId,
     handler: SaveSchedule,
 ) -> ScheduleResponse:
@@ -61,7 +61,7 @@ async def save_schedule(
 
 @router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_schedule(
-    plan_id: uuid.UUID,
+    plan_id: uuid.UUID,  # pyright: ignore[reportUnusedParameter]
     schedule_id: uuid.UUID,
     user_id: CurrentUserId,
     handler: DeleteSchedule,

@@ -1,5 +1,5 @@
-from collections.abc import Sequence
-from typing import Any, Never, cast
+from collections.abc import Mapping, Sequence
+from typing import Any, Never, cast, final
 from uuid import UUID
 
 import sqlalchemy
@@ -34,6 +34,7 @@ from amortsched.core.errors import (
 from amortsched.core.specifications import Specification, With
 
 
+@final
 class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
     _table = users
     _from_row = staticmethod(user_from_row)
@@ -58,14 +59,14 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
     }
 
     @staticmethod
-    def _build_plans_statement(user_ids: list[UUID], relation: With[Any]):
+    def _build_plans_statement(user_ids: list[UUID], relation: With[Any]):  # pyright: ignore[reportExplicitAny]
         statement = sqlalchemy.select(plans).where(plans.c.user_id.in_(user_ids)).order_by(plans.c.created_at)
         if relation.spec is not None:
             statement = statement.where(compile_specification(plans, relation.spec))
         return statement
 
     @staticmethod
-    def _build_profiles_statement(user_ids: list[UUID], relation: With[Any]):
+    def _build_profiles_statement(user_ids: list[UUID], relation: With[Any]):  # pyright: ignore[reportExplicitAny]
         statement = sqlalchemy.select(profiles).where(profiles.c.user_id.in_(user_ids))
         if relation.spec is not None:
             statement = statement.where(compile_specification(profiles, relation.spec))
@@ -82,34 +83,34 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
             raise DuplicateEmailError(email) from exc
         raise exc
 
-    async def add(self, item: User) -> User:
+    async def add(self, item: User) -> User:  # pyright: ignore[reportImplicitOverride]
         statement = sqlalchemy.insert(users).values(**user_to_values(item))
         try:
-            await self._session.execute(statement)
+            await self._session.execute(statement)  # pyright: ignore[reportUnusedCallResult]
         except IntegrityError as exc:
             self._raise_duplicate_email(exc, item.email)
         return item
 
-    async def update(self, item: User) -> User:
+    async def update(self, item: User) -> User:  # pyright: ignore[reportImplicitOverride]
         statement = sqlalchemy.update(users).where(users.c.id == item.id).values(**user_to_values(item))
         result = None
         try:
             result = await self._session.execute(statement)
         except IntegrityError as exc:
             self._raise_duplicate_email(exc, item.email)
-        if result is None or result.rowcount == 0:
+        if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
             raise UserNotFoundError(item.id)
         return item
 
-    async def save(self, item: User, conflict_on: Sequence[str] = ("id",)) -> User:
+    async def save(self, item: User, conflict_on: Sequence[str] = ("id",)) -> User:  # pyright: ignore[reportImplicitOverride]
         statement = build_postgres_upsert_statement(users, user_to_values(item), conflict_on)
         try:
-            await self._session.execute(statement)
+            await self._session.execute(statement)  # pyright: ignore[reportUnusedCallResult]
         except IntegrityError as exc:
             self._raise_duplicate_email(exc, item.email)
         return item
 
-    async def _load_relations(self, items: list[User], relations: list[PlannedRelation]) -> None:
+    async def _load_relations(self, items: list[User], relations: list[PlannedRelation]) -> None:  # pyright: ignore[reportImplicitOverride]
         if not items:
             return
         user_ids = [item.id for item in items]
@@ -121,9 +122,9 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
             elif relation.relationship.key == "profile":
                 await self._load_profile(users_by_id, user_ids, relation.relation)
 
-    async def _load_plans(self, users_by_id: dict[UUID, User], user_ids: list[UUID], relation: With[Any]) -> None:
+    async def _load_plans(self, users_by_id: dict[UUID, User], user_ids: list[UUID], relation: With[Any]) -> None:  # pyright: ignore[reportExplicitAny]
         statement = self._build_plans_statement(user_ids, relation)
-        rows = (await self._session.execute(statement)).mappings().all()
+        rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
 
         plans_by_user: dict[UUID, list[Plan]] = {user_id: [] for user_id in user_ids}
         for row in rows:
@@ -134,9 +135,9 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
         for user_id, user in users_by_id.items():
             user.plans = plans_by_user.get(user_id, [])
 
-    async def _load_profile(self, users_by_id: dict[UUID, User], user_ids: list[UUID], relation: With[Any]) -> None:
+    async def _load_profile(self, users_by_id: dict[UUID, User], user_ids: list[UUID], relation: With[Any]) -> None:  # pyright: ignore[reportExplicitAny]
         statement = self._build_profiles_statement(user_ids, relation)
-        rows = (await self._session.execute(statement)).mappings().all()
+        rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
 
         profiles_by_user = {cast(UUID, row["user_id"]): profile_from_row(row) for row in rows}
         for profile in profiles_by_user.values():
@@ -145,6 +146,7 @@ class AsyncSqlAlchemyUserRepository(BaseAsyncRepository[User]):
             user.profile = profiles_by_user.get(user_id)
 
 
+@final
 class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
     _table = plans
     _from_row = staticmethod(plan_from_row)
@@ -176,7 +178,7 @@ class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
         return statement
 
     @staticmethod
-    def _build_schedules_statement(plan_ids: list[UUID], relation: With[Any]):
+    def _build_schedules_statement(plan_ids: list[UUID], relation: With[Any]):  # pyright: ignore[reportExplicitAny]
         statement = (
             sqlalchemy.select(schedules).where(schedules.c.plan_id.in_(plan_ids)).order_by(schedules.c.generated_at)
         )
@@ -184,7 +186,7 @@ class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
             statement = statement.where(compile_specification(schedules, relation.spec))
         return statement
 
-    async def _load_relations(self, items: list[Plan], relations: list[PlannedRelation]) -> None:
+    async def _load_relations(self, items: list[Plan], relations: list[PlannedRelation]) -> None:  # pyright: ignore[reportImplicitOverride]
         if not items:
             return
         plan_ids = [item.id for item in items]
@@ -196,10 +198,10 @@ class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
             elif relation.relationship.key == "schedules":
                 await self._load_schedules(plans_by_id, plan_ids, relation.relation)
 
-    async def _load_users(self, plans_by_id: dict[UUID, Plan], relation: With[Any]) -> None:
+    async def _load_users(self, plans_by_id: dict[UUID, Plan], relation: With[Any]) -> None:  # pyright: ignore[reportExplicitAny]
         user_ids = [plan.user_id for plan in plans_by_id.values()]
-        statement = self._build_users_statement(user_ids, relation.spec)
-        rows = (await self._session.execute(statement)).mappings().all()
+        statement = self._build_users_statement(user_ids, relation.spec)  # pyright: ignore[reportArgumentType]
+        rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
 
         users_by_id = {cast(UUID, row["id"]): user_from_row(row) for row in rows}
         for plan in plans_by_id.values():
@@ -209,10 +211,10 @@ class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
         self,
         plans_by_id: dict[UUID, Plan],
         plan_ids: list[UUID],
-        relation: With[Any],
+        relation: With[Any],  # pyright: ignore[reportExplicitAny]
     ) -> None:
         statement = self._build_schedules_statement(plan_ids, relation)
-        rows = (await self._session.execute(statement)).mappings().all()
+        rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
 
         schedules_by_plan: dict[UUID, list[Schedule]] = {plan_id: [] for plan_id in plan_ids}
         for row in rows:
@@ -224,6 +226,7 @@ class AsyncSqlAlchemyPlanRepository(BaseAsyncRepository[Plan]):
             plan.schedules = schedules_by_plan.get(plan_id, [])
 
 
+@final
 class AsyncSqlAlchemyScheduleRepository(BaseAsyncRepository[Schedule]):
     _table = schedules
     _from_row = staticmethod(schedule_from_row)
@@ -247,7 +250,7 @@ class AsyncSqlAlchemyScheduleRepository(BaseAsyncRepository[Schedule]):
             statement = statement.where(compile_specification(plans, specification))
         return statement
 
-    async def _load_relations(self, items: list[Schedule], relations: list[PlannedRelation]) -> None:
+    async def _load_relations(self, items: list[Schedule], relations: list[PlannedRelation]) -> None:  # pyright: ignore[reportImplicitOverride]
         if not items:
             return
         schedules_by_id = {item.id: item for item in items}
@@ -256,13 +259,14 @@ class AsyncSqlAlchemyScheduleRepository(BaseAsyncRepository[Schedule]):
         for relation in relations:
             if relation.relationship.key != "plan":
                 continue
-            statement = self._build_plans_statement(plan_ids, relation.relation.spec)
-            rows = (await self._session.execute(statement)).mappings().all()
+            statement = self._build_plans_statement(plan_ids, relation.relation.spec)  # pyright: ignore[reportArgumentType]
+            rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
             plans_by_id = {cast(UUID, row["id"]): plan_from_row(row) for row in rows}
             for schedule in schedules_by_id.values():
                 schedule.plan = plans_by_id.get(schedule.plan_id)
 
 
+@final
 class AsyncSqlAlchemyProfileRepository(BaseAsyncRepository[Profile]):
     _table = profiles
     _from_row = staticmethod(profile_from_row)
@@ -285,7 +289,7 @@ class AsyncSqlAlchemyProfileRepository(BaseAsyncRepository[Profile]):
             statement = statement.where(compile_specification(users, specification))
         return statement
 
-    async def _load_relations(self, items: list[Profile], relations: list[PlannedRelation]) -> None:
+    async def _load_relations(self, items: list[Profile], relations: list[PlannedRelation]) -> None:  # pyright: ignore[reportImplicitOverride]
         if not items:
             return
         profile_user_ids = [item.user_id for item in items]
@@ -294,23 +298,24 @@ class AsyncSqlAlchemyProfileRepository(BaseAsyncRepository[Profile]):
         for relation in relations:
             if relation.relationship.key != "user":
                 continue
-            statement = self._build_users_statement(profile_user_ids, relation.relation.spec)
-            rows = (await self._session.execute(statement)).mappings().all()
+            statement = self._build_users_statement(profile_user_ids, relation.relation.spec)  # pyright: ignore[reportArgumentType]
+            rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
             for row in rows:
                 user = user_from_row(row)
                 profiles_by_user_id[user.id].user = user
 
 
+@final
 class AsyncSqlAlchemyRefreshTokenRepository(BaseAsyncRepository[RefreshToken]):
     _table = refresh_tokens
     _from_row = staticmethod(refresh_token_from_row)
     _to_values = staticmethod(refresh_token_to_values)
     _not_found_error = RefreshTokenNotFoundError
-    _relationships: dict[str, Relationship] = {}
+    _relationships: dict[str, Relationship] = {}  # pyright: ignore[reportIncompatibleVariableOverride]
 
     async def get_by_token_hash(self, token_hash: str) -> RefreshToken | None:
         statement = sqlalchemy.select(refresh_tokens).where(refresh_tokens.c.token_hash == token_hash)
-        row = (await self._session.execute(statement)).mappings().first()
+        row = cast(Mapping[str, object] | None, (await self._session.execute(statement)).mappings().first())
         if row is None:
             return None
         return refresh_token_from_row(row)
@@ -323,7 +328,7 @@ class AsyncSqlAlchemyRefreshTokenRepository(BaseAsyncRepository[RefreshToken]):
             .values(revoked_at=sqlalchemy.func.now())
         )
         result = await self._session.execute(statement)
-        return result.rowcount
+        return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
 
     async def mark_used(self, token_id: UUID) -> None:
         statement = (
@@ -331,4 +336,4 @@ class AsyncSqlAlchemyRefreshTokenRepository(BaseAsyncRepository[RefreshToken]):
             .where(refresh_tokens.c.id == token_id)
             .values(used_at=sqlalchemy.func.now())
         )
-        await self._session.execute(statement)
+        await self._session.execute(statement)  # pyright: ignore[reportUnusedCallResult]

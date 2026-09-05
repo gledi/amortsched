@@ -70,7 +70,7 @@ class CreatePlanCommand:
 
 class CreatePlanHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: CreatePlanCommand) -> Plan:
         amount = command.amount if isinstance(command.amount, Decimal) else Decimal(command.amount)
@@ -96,7 +96,7 @@ class CreatePlanHandler:
             else EarlyPaymentFees(),
             interest_rate_application=command.interest_rate_application,
         )
-        await self._plan_repo.add(plan)
+        _ = await self._plan_repo.add(plan)
         return plan
 
 
@@ -115,7 +115,7 @@ class UpdatePlanCommand:
 
 class UpdatePlanHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: UpdatePlanCommand) -> Plan:
         plan = await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
@@ -141,7 +141,7 @@ class UpdatePlanHandler:
         if command.interest_rate_application is not None:
             plan.interest_rate_application = command.interest_rate_application
         plan.touch()
-        await self._plan_repo.update(plan)
+        _ = await self._plan_repo.update(plan)
         return plan
 
 
@@ -153,11 +153,11 @@ class DeletePlanCommand:
 
 class DeletePlanHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: DeletePlanCommand) -> None:
-        await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
-        await self._plan_repo.delete(Id(command.plan_id))
+        _ = await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
+        _ = await self._plan_repo.delete(Id(command.plan_id))
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,13 +168,13 @@ class SavePlanCommand:
 
 class SavePlanHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: SavePlanCommand) -> Plan:
         plan = await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
         plan.status = Plan.Status.Saved
         plan.touch()
-        await self._plan_repo.update(plan)
+        _ = await self._plan_repo.update(plan)
         return plan
 
 
@@ -188,14 +188,14 @@ class AddOneTimeExtraPaymentCommand:
 
 class AddOneTimeExtraPaymentHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: AddOneTimeExtraPaymentCommand) -> Plan:
         plan = await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
         amount = command.amount if isinstance(command.amount, Decimal) else Decimal(command.amount)
         plan.one_time_extra_payments.append(OneTimeExtraPayment(date=command.date, amount=amount))
         plan.touch()
-        await self._plan_repo.update(plan)
+        _ = await self._plan_repo.update(plan)
         return plan
 
 
@@ -210,7 +210,7 @@ class AddRecurringExtraPaymentCommand:
 
 class AddRecurringExtraPaymentHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: AddRecurringExtraPaymentCommand) -> Plan:
         plan = await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
@@ -219,7 +219,7 @@ class AddRecurringExtraPaymentHandler:
             RecurringExtraPayment(start_date=command.start_date, amount=amount, count=command.count)
         )
         plan.touch()
-        await self._plan_repo.update(plan)
+        _ = await self._plan_repo.update(plan)
         return plan
 
 
@@ -233,7 +233,7 @@ class AddInterestRateChangeCommand:
 
 class AddInterestRateChangeHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: AddInterestRateChangeCommand) -> Plan:
         plan = await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
@@ -243,7 +243,7 @@ class AddInterestRateChangeHandler:
         )
         plan.interest_rate_changes.sort(key=lambda c: c.effective_date)
         plan.touch()
-        await self._plan_repo.update(plan)
+        _ = await self._plan_repo.update(plan)
         return plan
 
 
@@ -255,13 +255,13 @@ class SaveScheduleCommand:
 
 class SaveScheduleHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan], schedule_repo: AsyncRepository[Schedule]) -> None:
-        self._plan_repo = plan_repo
-        self._schedule_repo = schedule_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
+        self._schedule_repo: AsyncRepository[Schedule] = schedule_repo
 
     async def handle(self, command: SaveScheduleCommand) -> Schedule:
         plan = await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
         schedule = plan.generate()
-        await self._schedule_repo.add(schedule)
+        _ = await self._schedule_repo.add(schedule)
         return schedule
 
 
@@ -273,9 +273,9 @@ class DeleteScheduleCommand:
 
 class DeleteScheduleHandler:
     def __init__(self, schedule_repo: AsyncRepository[Schedule], plan_repo: AsyncRepository[Plan]) -> None:
-        self._schedule_repo = schedule_repo
-        self._plan_repo = plan_repo
+        self._schedule_repo: AsyncRepository[Schedule] = schedule_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: DeleteScheduleCommand) -> None:
-        await _get_owned_schedule(self._schedule_repo, self._plan_repo, command.schedule_id, command.user_id)
-        await self._schedule_repo.delete(Id(command.schedule_id))
+        _ = await _get_owned_schedule(self._schedule_repo, self._plan_repo, command.schedule_id, command.user_id)
+        _ = await self._schedule_repo.delete(Id(command.schedule_id))

@@ -30,7 +30,7 @@ class GetPlanQuery:
 
 class GetPlanHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, query: GetPlanQuery) -> Plan:
         return await _get_owned_plan(self._plan_repo, query.plan_id, query.user_id)
@@ -43,7 +43,7 @@ class ListPlansQuery:
 
 class ListPlansHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, query: ListPlansQuery) -> list[Plan]:
         return [item async for item in self._plan_repo.get_items(Eq("user_id", query.user_id))]

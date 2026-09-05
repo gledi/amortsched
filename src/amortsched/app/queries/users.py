@@ -14,7 +14,7 @@ class GetUserQuery:
 
 class GetUserHandler:
     def __init__(self, user_repo: AsyncRepository[User]) -> None:
-        self._user_repo = user_repo
+        self._user_repo: AsyncRepository[User] = user_repo
 
     async def handle(self, query: GetUserQuery) -> User:
         user = await self._user_repo.get_by_id(query.user_id)
@@ -30,7 +30,7 @@ class GetProfileQuery:
 
 class GetProfileHandler:
     def __init__(self, profile_repo: AsyncRepository[Profile]) -> None:
-        self._profile_repo = profile_repo
+        self._profile_repo: AsyncRepository[Profile] = profile_repo
 
     async def handle(self, query: GetProfileQuery) -> Profile:
         profile = await self._profile_repo.get_one_or_none(Eq("user_id", query.user_id))

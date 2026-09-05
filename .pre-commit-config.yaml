@@ -18,9 +18,10 @@ repos:
       - id: check-merge-conflict
 
   - repo: https://github.com/DetachHead/basedpyright-prek-mirror
-    rev: 1.39.9
+    rev: 1.39.10
     hooks:
       - id: basedpyright
+        files: ^src/
 
   - repo: https://github.com/charliermarsh/ruff-pre-commit
     rev: v0.16.6

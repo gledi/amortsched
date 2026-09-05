@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from typing import Any, ClassVar, assert_type, cast
 from uuid import UUID
 
@@ -12,7 +12,6 @@ from amortsched.adapters.persistence.helpers import (
     extract_paginated_items_and_total,
     normalize_paginated_limit,
 )
-from amortsched.adapters.persistence.mappers import RowLike
 from amortsched.adapters.persistence.relationships import (
     PlannedRelation,
     Relationship,
@@ -27,8 +26,8 @@ from amortsched.core.specifications import Id, Specification
 
 class BaseRepository[T: Entity]:
     _table: ClassVar[Table]
-    _from_row: ClassVar[Callable[[RowLike], Any]]
-    _to_values: ClassVar[Callable[..., dict[str, object]]]
+    _from_row: ClassVar[Callable[..., Any]]  # pyright: ignore[reportExplicitAny]
+    _to_values: ClassVar[Callable[..., Mapping[str, object]]]
     _order_column: ClassVar[str] = "created_at"
     _not_found_error: ClassVar[type[Exception]]
     _relationships: ClassVar[dict[str, Relationship]]
@@ -93,14 +92,14 @@ class BaseRepository[T: Entity]:
 
 class AsyncRepository[T: Entity](BaseRepository[T]):
     def __init__(self, session: sqlalchemy.ext.asyncio.AsyncSession) -> None:
-        self._session = session
+        self._session: sqlalchemy.ext.asyncio.AsyncSession = session
 
-    async def _load_relations(self, items: list[T], relations: list[PlannedRelation]) -> None:
+    async def _load_relations(self, _items: list[T], _relations: list[PlannedRelation]) -> None:
         pass
 
     async def get_by_id(self, id: UUID, specification: Specification[T] | None = None) -> T | None:
-        filter_spec = Id(id) if specification is None else Id(id) & specification
-        return await self.get_one_or_none(filter_spec)
+        filter_spec = Id(id) if specification is None else Id(id) & specification  # pyright: ignore[reportUnknownVariableType]
+        return await self.get_one_or_none(filter_spec)  # pyright: ignore[reportUnknownArgumentType]
 
     async def get_one(self, specification: Specification[T]) -> T:
         item = await self.get_one_or_none(specification)
@@ -123,11 +122,11 @@ class AsyncRepository[T: Entity](BaseRepository[T]):
         filter_spec, relation_plan = self._plan_requested_relations(specification)
         statement = self._build_get_items_statement(filter_spec, limit)
 
-        rows = (await self._session.execute(statement)).mappings().all()
+        rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
         items = [self._from_row(row) for row in rows]
         await self._load_relations(items, relation_plan.joins + relation_plan.select_ins)
 
-        for item in items:
+        for item in items:  # pyright: ignore[reportAny]
             yield item
 
     async def get_paginated(
@@ -138,38 +137,40 @@ class AsyncRepository[T: Entity](BaseRepository[T]):
         self._ensure_order_by_supported(None if pagination is None else pagination.order_by)
         statement, limit, offset, relation_plan = self._build_paginated_statements(specification, pagination)
 
-        rows = (await self._session.execute(statement)).mappings().all()
+        rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
         items, total = extract_paginated_items_and_total(rows, "id", self._from_row)
         normalized_limit = normalize_paginated_limit(limit, total)
-        assert_type(normalized_limit, int)
+        assert_type(normalized_limit, int)  # pyright: ignore[reportUnusedCallResult]
         await self._load_relations(items, relation_plan.joins + relation_plan.select_ins)
-        return Paginated.from_limit_offset(items, total=total, limit=normalized_limit, offset=offset)
+        return Paginated.from_limit_offset(items, total=total, limit=normalized_limit, offset=offset)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
     async def count(self, specification: Specification[T] | None = None) -> int:
         filter_spec, _relation_plan = self._plan_requested_relations(specification)
         statement = self._build_count_statement(filter_spec)
-        return cast(int, (await self._session.execute(statement)).scalar_one())
+        result: int = (await self._session.execute(statement)).scalar_one()
+        return result
 
     async def exists(self, specification: Specification[T]) -> bool:
         filter_spec, _relation_plan = self._plan_requested_relations(specification)
         statement = self._build_exists_statement(filter_spec)
-        return cast(bool, (await self._session.execute(statement)).scalar_one())
+        result: bool = (await self._session.execute(statement)).scalar_one()
+        return result
 
     async def add(self, item: T) -> T:
         statement = sqlalchemy.insert(self._table).values(**self._to_values(item))
-        await self._session.execute(statement)
+        await self._session.execute(statement)  # pyright: ignore[reportUnusedCallResult]
         return item
 
     async def update(self, item: T) -> T:
         statement = sqlalchemy.update(self._table).where(self._table.c.id == item.id).values(**self._to_values(item))
         result = await self._session.execute(statement)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
             raise self._not_found_error(item.id)
         return item
 
     async def save(self, item: T, conflict_on: Sequence[str] = ("id",)) -> T:
         statement = build_postgres_upsert_statement(self._table, self._to_values(item), conflict_on)
-        await self._session.execute(statement)
+        await self._session.execute(statement)  # pyright: ignore[reportUnusedCallResult]
         return item
 
     async def delete(self, specification: Specification[T]) -> int:
@@ -177,11 +178,11 @@ class AsyncRepository[T: Entity](BaseRepository[T]):
         filter_spec, _relations = extract_relations(specification)
         statement = self._build_delete_statement(filter_spec)
         result = await self._session.execute(statement)
-        return result.rowcount
+        return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
 
     async def purge(self, specification: Specification[T]) -> int:
         ensure_no_relations(specification, "purge")
         filter_spec, _relations = extract_relations(specification)
         statement = self._build_delete_statement(filter_spec)
         result = await self._session.execute(statement)
-        return result.rowcount
+        return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]

@@ -48,11 +48,11 @@ def get_password_hasher() -> PBKDF2PasswordHasher:
 
 
 async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
-    async with request.app.state.async_session_factory() as session:
+    async with request.app.state.async_session_factory() as session:  # pyright: ignore[reportAny]
         try:
             yield session
         finally:
-            await session.commit()
+            await session.commit()  # pyright: ignore[reportAny]
 
 
 DbSession = Annotated[AsyncSession, Depends(get_session)]
@@ -78,7 +78,7 @@ def get_token_service(settings: AppSettings) -> JwtTokenService:
 
 async def get_current_user_id(
     token: Annotated[str, Depends(oauth2_scheme)],
-    token_service: JwtTokenService = Depends(get_token_service),
+    token_service: JwtTokenService = Depends(get_token_service),  # pyright: ignore[reportCallInDefaultInitializer]
 ) -> uuid.UUID:
     try:
         return token_service.decode_access_token(token)

@@ -1,7 +1,8 @@
 import datetime
 from collections.abc import Mapping
 from decimal import Decimal
-from typing import Any, cast
+from typing import cast
+from uuid import UUID
 
 from amortsched.core.entities import Plan, Profile, RefreshToken, Schedule, User
 from amortsched.core.values import (
@@ -19,10 +20,20 @@ from amortsched.core.values import (
     Term,
 )
 
-type RowLike = Mapping[str, Any] | Any
+
+def _decimal_to_string(value: Decimal) -> str:
+    return str(value)
 
 
-def user_to_values(user: User) -> dict[str, object]:
+def _date_to_string(value: datetime.date) -> str:
+    return value.isoformat()
+
+
+def _date_from_string(value: str) -> datetime.date:
+    return datetime.date.fromisoformat(value)
+
+
+def user_to_values(user: User) -> Mapping[str, object]:
     return {
         "id": user.id,
         "email": user.email,
@@ -34,19 +45,19 @@ def user_to_values(user: User) -> dict[str, object]:
     }
 
 
-def user_from_row(row: RowLike) -> User:
+def user_from_row(row: Mapping[str, object]) -> User:
     return User(
-        id=_row_value(row, "id"),
-        email=_row_value(row, "email"),
-        name=_row_value(row, "name"),
-        is_active=_row_value(row, "is_active"),
-        password_hash=_row_value(row, "password_hash"),
-        created_at=_row_value(row, "created_at"),
-        updated_at=_row_value(row, "updated_at"),
+        id=cast(UUID, row["id"]),
+        email=cast(str, row["email"]),
+        name=cast(str, row["name"]),
+        is_active=cast(bool, row["is_active"]),
+        password_hash=cast(str, row["password_hash"]),
+        created_at=cast(datetime.datetime, row["created_at"]),
+        updated_at=cast(datetime.datetime, row["updated_at"]),
     )
 
 
-def profile_to_values(profile: Profile) -> dict[str, object]:
+def profile_to_values(profile: Profile) -> Mapping[str, object]:
     return {
         "id": profile.id,
         "user_id": profile.user_id,
@@ -59,20 +70,20 @@ def profile_to_values(profile: Profile) -> dict[str, object]:
     }
 
 
-def profile_from_row(row: RowLike) -> Profile:
+def profile_from_row(row: Mapping[str, object]) -> Profile:
     return Profile(
-        id=_row_value(row, "id"),
-        user_id=_row_value(row, "user_id"),
-        display_name=_row_value(row, "display_name"),
-        phone=_row_value(row, "phone"),
-        locale=_row_value(row, "locale"),
-        timezone=_row_value(row, "timezone"),
-        created_at=_row_value(row, "created_at"),
-        updated_at=_row_value(row, "updated_at"),
+        id=cast(UUID, row["id"]),
+        user_id=cast(UUID, row["user_id"]),
+        display_name=cast(str | None, row["display_name"]),
+        phone=cast(str | None, row["phone"]),
+        locale=cast(str | None, row["locale"]),
+        timezone=cast(str | None, row["timezone"]),
+        created_at=cast(datetime.datetime, row["created_at"]),
+        updated_at=cast(datetime.datetime, row["updated_at"]),
     )
 
 
-def plan_to_values(plan: Plan) -> dict[str, object]:
+def plan_to_values(plan: Plan) -> Mapping[str, object]:
     return {
         "id": plan.id,
         "user_id": plan.user_id,
@@ -97,38 +108,38 @@ def plan_to_values(plan: Plan) -> dict[str, object]:
     }
 
 
-def plan_from_row(row: RowLike) -> Plan:
+def plan_from_row(row: Mapping[str, object]) -> Plan:
     return Plan(
-        id=_row_value(row, "id"),
-        user_id=_row_value(row, "user_id"),
-        name=_row_value(row, "name"),
-        slug=_row_value(row, "slug"),
-        amount=Decimal(str(_row_value(row, "amount"))),
-        term=Term(_row_value(row, "term_years"), _row_value(row, "term_months")),
-        interest_rate=Decimal(str(_row_value(row, "interest_rate"))),
-        start_date=_row_value(row, "start_date"),
-        early_payment_fees=_early_payment_fees_from_payload(_row_value(row, "early_payment_fees")),
-        interest_rate_application=InterestRateApplication(_row_value(row, "interest_rate_application")),
-        status=Plan.Status(_row_value(row, "status")),
+        id=cast(UUID, row["id"]),
+        user_id=cast(UUID, row["user_id"]),
+        name=cast(str, row["name"]),
+        slug=cast(str, row["slug"]),
+        amount=Decimal(str(row["amount"])),
+        term=Term(cast(int, row["term_years"]), cast(int, row["term_months"])),
+        interest_rate=Decimal(str(row["interest_rate"])),
+        start_date=cast(datetime.date, row["start_date"]),
+        early_payment_fees=_early_payment_fees_from_payload(cast(Mapping[str, object], row["early_payment_fees"])),
+        interest_rate_application=InterestRateApplication(cast(str, row["interest_rate_application"])),
+        status=Plan.Status(cast(str, row["status"])),
         one_time_extra_payments=[
             _one_time_extra_payment_from_payload(item)
-            for item in cast(list[dict[str, Any]], _row_value(row, "one_time_extra_payments"))
+            for item in cast(list[Mapping[str, object]], row["one_time_extra_payments"])
         ],
         recurring_extra_payments=[
             _recurring_extra_payment_from_payload(item)
-            for item in cast(list[dict[str, Any]], _row_value(row, "recurring_extra_payments"))
+            for item in cast(list[Mapping[str, object]], row["recurring_extra_payments"])
         ],
         interest_rate_changes=[
             _interest_rate_change_from_payload(item)
-            for item in cast(list[dict[str, Any]], _row_value(row, "interest_rate_changes"))
+            for item in cast(list[Mapping[str, object]], row["interest_rate_changes"])
         ],
-        is_deleted=_row_value(row, "is_deleted"),
-        created_at=_row_value(row, "created_at"),
-        updated_at=_row_value(row, "updated_at"),
+        is_deleted=cast(bool, row["is_deleted"]),
+        created_at=cast(datetime.datetime, row["created_at"]),
+        updated_at=cast(datetime.datetime, row["updated_at"]),
     )
 
 
-def schedule_to_values(schedule: Schedule) -> dict[str, object]:
+def schedule_to_values(schedule: Schedule) -> Mapping[str, object]:
     return {
         "id": schedule.id,
         "plan_id": schedule.plan_id,
@@ -139,20 +150,20 @@ def schedule_to_values(schedule: Schedule) -> dict[str, object]:
     }
 
 
-def schedule_from_row(row: RowLike) -> Schedule:
-    installments_payload = cast(list[dict[str, Any]], _row_value(row, "installments"))
-    totals_payload = cast(dict[str, Any] | None, _row_value(row, "totals"))
+def schedule_from_row(row: Mapping[str, object]) -> Schedule:
+    installments_payload = cast(list[Mapping[str, object]], row["installments"])
+    totals_payload = cast(Mapping[str, object] | None, row["totals"])
     return Schedule(
-        id=_row_value(row, "id"),
-        plan_id=_row_value(row, "plan_id"),
+        id=cast(UUID, row["id"]),
+        plan_id=cast(UUID, row["plan_id"]),
         installments=[_installment_from_payload(item) for item in installments_payload],
         totals=None if totals_payload is None else _totals_from_payload(totals_payload),
-        generated_at=_row_value(row, "generated_at"),
-        is_deleted=_row_value(row, "is_deleted"),
+        generated_at=cast(datetime.datetime, row["generated_at"]),
+        is_deleted=cast(bool, row["is_deleted"]),
     )
 
 
-def refresh_token_to_values(token: RefreshToken) -> dict[str, object]:
+def refresh_token_to_values(token: RefreshToken) -> Mapping[str, object]:
     return {
         "id": token.id,
         "user_id": token.user_id,
@@ -165,66 +176,48 @@ def refresh_token_to_values(token: RefreshToken) -> dict[str, object]:
     }
 
 
-def refresh_token_from_row(row: RowLike) -> RefreshToken:
+def refresh_token_from_row(row: Mapping[str, object]) -> RefreshToken:
     return RefreshToken(
-        id=_row_value(row, "id"),
-        user_id=_row_value(row, "user_id"),
-        token_hash=_row_value(row, "token_hash"),
-        family_id=_row_value(row, "family_id"),
-        expires_at=_row_value(row, "expires_at"),
-        used_at=_row_value(row, "used_at"),
-        revoked_at=_row_value(row, "revoked_at"),
-        created_at=_row_value(row, "created_at"),
+        id=cast(UUID, row["id"]),
+        user_id=cast(UUID, row["user_id"]),
+        token_hash=cast(str, row["token_hash"]),
+        family_id=cast(UUID, row["family_id"]),
+        expires_at=cast(datetime.datetime, row["expires_at"]),
+        used_at=cast(datetime.datetime | None, row["used_at"]),
+        revoked_at=cast(datetime.datetime | None, row["revoked_at"]),
+        created_at=cast(datetime.datetime, row["created_at"]),
     )
 
 
-def _row_value(row: RowLike, key: str) -> Any:
-    if isinstance(row, Mapping):
-        return row[key]
-    return getattr(row, key)
-
-
-def _decimal_to_string(value: Decimal) -> str:
-    return str(value)
-
-
-def _date_to_string(value: datetime.date) -> str:
-    return value.isoformat()
-
-
-def _date_from_string(value: str) -> datetime.date:
-    return datetime.date.fromisoformat(value)
-
-
-def _early_payment_fees_to_payload(fees: EarlyPaymentFees) -> dict[str, str]:
+def _early_payment_fees_to_payload(fees: EarlyPaymentFees) -> Mapping[str, object]:
     return {
         "fixed": _decimal_to_string(Decimal(fees.fixed)),
         "percent": _decimal_to_string(Decimal(fees.percent)),
     }
 
 
-def _early_payment_fees_from_payload(payload: Mapping[str, Any]) -> EarlyPaymentFees:
+def _early_payment_fees_from_payload(payload: Mapping[str, object]) -> EarlyPaymentFees:
     return EarlyPaymentFees(
         fixed=Decimal(str(payload["fixed"])),
         percent=Decimal(str(payload["percent"])),
     )
 
 
-def _one_time_extra_payment_to_payload(payment: OneTimeExtraPayment) -> dict[str, str]:
+def _one_time_extra_payment_to_payload(payment: OneTimeExtraPayment) -> Mapping[str, object]:
     return {
         "date": _date_to_string(payment.date),
         "amount": _decimal_to_string(payment.amount),
     }
 
 
-def _one_time_extra_payment_from_payload(payload: Mapping[str, Any]) -> OneTimeExtraPayment:
+def _one_time_extra_payment_from_payload(payload: Mapping[str, object]) -> OneTimeExtraPayment:
     return OneTimeExtraPayment(
         date=_date_from_string(str(payload["date"])),
         amount=Decimal(str(payload["amount"])),
     )
 
 
-def _recurring_extra_payment_to_payload(payment: RecurringExtraPayment) -> dict[str, Any]:
+def _recurring_extra_payment_to_payload(payment: RecurringExtraPayment) -> Mapping[str, object]:
     return {
         "start_date": _date_to_string(payment.start_date),
         "amount": _decimal_to_string(payment.amount),
@@ -232,29 +225,29 @@ def _recurring_extra_payment_to_payload(payment: RecurringExtraPayment) -> dict[
     }
 
 
-def _recurring_extra_payment_from_payload(payload: Mapping[str, Any]) -> RecurringExtraPayment:
+def _recurring_extra_payment_from_payload(payload: Mapping[str, object]) -> RecurringExtraPayment:
     return RecurringExtraPayment(
         start_date=_date_from_string(str(payload["start_date"])),
-        amount=Decimal(str(payload["amount"])),
-        count=int(payload["count"]),
+        amount=cast(Decimal, payload["amount"]),
+        count=cast(int, payload["count"]),
     )
 
 
-def _interest_rate_change_to_payload(change: InterestRateChange) -> dict[str, str]:
+def _interest_rate_change_to_payload(change: InterestRateChange) -> Mapping[str, object]:
     return {
         "effective_date": _date_to_string(change.effective_date),
         "yearly_interest_rate": _decimal_to_string(change.yearly_interest_rate),
     }
 
 
-def _interest_rate_change_from_payload(payload: Mapping[str, Any]) -> InterestRateChange:
+def _interest_rate_change_from_payload(payload: Mapping[str, object]) -> InterestRateChange:
     return InterestRateChange(
         effective_date=_date_from_string(str(payload["effective_date"])),
         yearly_interest_rate=Decimal(str(payload["yearly_interest_rate"])),
     )
 
 
-def _installment_to_payload(installment: Installment) -> dict[str, Any]:
+def _installment_to_payload(installment: Installment) -> Mapping[str, object]:
     return {
         "i": installment.i,
         "year": installment.year,
@@ -272,13 +265,13 @@ def _installment_to_payload(installment: Installment) -> dict[str, Any]:
     }
 
 
-def _installment_from_payload(payload: Mapping[str, Any]) -> Installment:
-    payment_payload = cast(Mapping[str, Any], payload["payment"])
-    balance_payload = cast(Mapping[str, Any], payload["balance"])
+def _installment_from_payload(payload: Mapping[str, object]) -> Installment:
+    payment_payload = cast(Mapping[str, object], payload["payment"])
+    balance_payload = cast(Mapping[str, object], payload["balance"])
     return Installment(
         i=cast(int | None, payload["i"]),
-        year=int(payload["year"]),
-        month=Month(int(payload["month"])),
+        year=cast(int, payload["year"]),
+        month=Month(cast(int, payload["month"])),
         payment=Payment(
             kind=PaymentKind(str(payment_payload["kind"])),
             principal=Decimal(str(payment_payload["principal"])),
@@ -292,7 +285,7 @@ def _installment_from_payload(payload: Mapping[str, Any]) -> Installment:
     )
 
 
-def _totals_to_payload(totals: ScheduleTotals) -> dict[str, Any]:
+def _totals_to_payload(totals: ScheduleTotals) -> Mapping[str, object]:
     return {
         "principal": _decimal_to_string(totals.principal),
         "interest": _decimal_to_string(totals.interest),
@@ -302,25 +295,11 @@ def _totals_to_payload(totals: ScheduleTotals) -> dict[str, Any]:
     }
 
 
-def _totals_from_payload(payload: Mapping[str, Any]) -> ScheduleTotals:
+def _totals_from_payload(payload: Mapping[str, object]) -> ScheduleTotals:
     return ScheduleTotals(
         principal=Decimal(str(payload["principal"])),
         interest=Decimal(str(payload["interest"])),
         fees=Decimal(str(payload["fees"])),
-        months=int(payload["months"]),
+        months=cast(int, payload["months"]),
         paid_off=bool(payload["paid_off"]),
     )
-
-
-__all__ = [
-    "plan_from_row",
-    "plan_to_values",
-    "profile_from_row",
-    "profile_to_values",
-    "refresh_token_from_row",
-    "refresh_token_to_values",
-    "schedule_from_row",
-    "schedule_to_values",
-    "user_from_row",
-    "user_to_values",
-]

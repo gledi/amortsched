@@ -26,13 +26,13 @@ class RegisterUserCommand:
 
 class RegisterUserHandler:
     def __init__(self, user_repo: AsyncRepository[User], password_hasher: PasswordHasher) -> None:
-        self._user_repo = user_repo
-        self._password_hasher = password_hasher
+        self._user_repo: AsyncRepository[User] = user_repo
+        self._password_hasher: PasswordHasher = password_hasher
 
     async def handle(self, command: RegisterUserCommand) -> User:
         password_hash = await asyncio.to_thread(self._password_hasher.hash, command.password)
         user = User(email=command.email, name=command.name, password_hash=password_hash)
-        await self._user_repo.add(user)
+        _ = await self._user_repo.add(user)
         return user
 
 
@@ -44,8 +44,8 @@ class AuthenticateUserCommand:
 
 class AuthenticateUserHandler:
     def __init__(self, user_repo: AsyncRepository[User], password_hasher: PasswordHasher) -> None:
-        self._user_repo = user_repo
-        self._password_hasher = password_hasher
+        self._user_repo: AsyncRepository[User] = user_repo
+        self._password_hasher: PasswordHasher = password_hasher
 
     async def handle(self, command: AuthenticateUserCommand) -> User:
         user = await self._user_repo.get_one_or_none(Eq("email", command.email))
@@ -67,8 +67,8 @@ class UpsertProfileCommand:
 
 class UpsertProfileHandler:
     def __init__(self, profile_repo: AsyncRepository[Profile], user_repo: AsyncRepository[User]) -> None:
-        self._profile_repo = profile_repo
-        self._user_repo = user_repo
+        self._profile_repo: AsyncRepository[Profile] = profile_repo
+        self._user_repo: AsyncRepository[User] = user_repo
 
     async def handle(self, command: UpsertProfileCommand) -> Profile:
         user = await self._user_repo.get_by_id(command.user_id)
@@ -82,7 +82,7 @@ class UpsertProfileHandler:
             existing.locale = command.locale
             existing.timezone = command.timezone
             existing.touch()
-            await self._profile_repo.update(existing)
+            _ = await self._profile_repo.update(existing)
             return existing
 
         profile = Profile(
@@ -92,7 +92,7 @@ class UpsertProfileHandler:
             locale=command.locale,
             timezone=command.timezone,
         )
-        await self._profile_repo.add(profile)
+        _ = await self._profile_repo.add(profile)
         return profile
 
 
@@ -114,9 +114,9 @@ class RefreshTokensHandler:
         token_service: TokenService,
         settings: Settings,
     ) -> None:
-        self._refresh_token_repo = refresh_token_repo
-        self._token_service = token_service
-        self._settings = settings
+        self._refresh_token_repo: RefreshTokenRepository = refresh_token_repo
+        self._token_service: TokenService = token_service
+        self._settings: Settings = settings
 
     async def handle(self, command: RefreshTokensCommand) -> RefreshTokensResult:
         token_hash = self._token_service.hash_refresh_token(command.refresh_token)
@@ -126,7 +126,7 @@ class RefreshTokensHandler:
             raise RefreshTokenNotFoundError()
 
         if existing.used_at is not None:
-            await self._refresh_token_repo.revoke_family(existing.family_id)
+            _ = await self._refresh_token_repo.revoke_family(existing.family_id)
             raise RefreshTokenReplayError()
 
         await self._refresh_token_repo.mark_used(existing.id)
@@ -138,7 +138,7 @@ class RefreshTokensHandler:
             family_id=existing.family_id,
             expires_at=now() + datetime.timedelta(days=self._settings.security.refresh_token_expiration_days),
         )
-        await self._refresh_token_repo.add(new_token)
+        _ = await self._refresh_token_repo.add(new_token)
 
         access_token = self._token_service.create_access_token(existing.user_id)
         return RefreshTokensResult(access_token=access_token, refresh_token=raw_token)
@@ -155,14 +155,14 @@ class LogoutHandler:
         refresh_token_repo: RefreshTokenRepository,
         token_service: TokenService,
     ) -> None:
-        self._refresh_token_repo = refresh_token_repo
-        self._token_service = token_service
+        self._refresh_token_repo: RefreshTokenRepository = refresh_token_repo
+        self._token_service: TokenService = token_service
 
     async def handle(self, command: LogoutCommand) -> None:
         token_hash = self._token_service.hash_refresh_token(command.refresh_token)
         existing = await self._refresh_token_repo.get_by_token_hash(token_hash)
         if existing is not None:
-            await self._refresh_token_repo.revoke_family(existing.family_id)
+            _ = await self._refresh_token_repo.revoke_family(existing.family_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,9 +177,9 @@ class CreateRefreshTokenHandler:
         token_service: TokenService,
         settings: Settings,
     ) -> None:
-        self._refresh_token_repo = refresh_token_repo
-        self._token_service = token_service
-        self._settings = settings
+        self._refresh_token_repo: RefreshTokenRepository = refresh_token_repo
+        self._token_service: TokenService = token_service
+        self._settings: Settings = settings
 
     async def handle(self, command: CreateRefreshTokenCommand) -> str:
         raw_token = self._token_service.create_refresh_token()
@@ -189,5 +189,5 @@ class CreateRefreshTokenHandler:
             family_id=uuid.uuid4(),
             expires_at=now() + datetime.timedelta(days=self._settings.security.refresh_token_expiration_days),
         )
-        await self._refresh_token_repo.add(token)
+        _ = await self._refresh_token_repo.add(token)
         return raw_token

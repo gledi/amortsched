@@ -31,24 +31,25 @@ _ERROR_MAP: list[tuple[type[DomainError], int, str, str]] = [
 ]
 
 
-def domain_error_to_problem(exc: DomainError) -> tuple[int, dict]:
+def domain_error_to_problem(exc: DomainError) -> tuple[int, dict[str, object]]:
     for error_type, status, type_suffix, title in _ERROR_MAP:
         if isinstance(exc, error_type):
-            body = {
+            body: dict[str, object] = {
                 "type": f"{_URN_PREFIX}{type_suffix}",
                 "title": title,
                 "status": status,
                 "detail": str(exc),
             }
-            if hasattr(exc, "errors"):
+            if isinstance(exc, ValidationError):
                 body["errors"] = exc.errors
             return status, body
-    return 400, {
+    fallback: dict[str, object] = {
         "type": f"{_URN_PREFIX}/errors/domain-error",
         "title": "Domain Error",
         "status": 400,
         "detail": str(exc),
     }
+    return 400, fallback
 
 
 async def domain_error_handler(_: Request, exc: Exception) -> JSONResponse:

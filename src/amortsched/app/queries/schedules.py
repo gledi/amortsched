@@ -51,7 +51,7 @@ class GenerateScheduleQuery:
 
 class GenerateScheduleHandler:
     def __init__(self, plan_repo: AsyncRepository[Plan]) -> None:
-        self._plan_repo = plan_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, query: GenerateScheduleQuery) -> Schedule:
         plan = await _get_owned_plan(self._plan_repo, query.plan_id, query.user_id)
@@ -66,8 +66,8 @@ class GetScheduleQuery:
 
 class GetScheduleHandler:
     def __init__(self, schedule_repo: AsyncRepository[Schedule], plan_repo: AsyncRepository[Plan]) -> None:
-        self._schedule_repo = schedule_repo
-        self._plan_repo = plan_repo
+        self._schedule_repo: AsyncRepository[Schedule] = schedule_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, query: GetScheduleQuery) -> Schedule:
         return await _get_owned_schedule(self._schedule_repo, self._plan_repo, query.schedule_id, query.user_id)
@@ -81,9 +81,9 @@ class ListSchedulesQuery:
 
 class ListSchedulesHandler:
     def __init__(self, schedule_repo: AsyncRepository[Schedule], plan_repo: AsyncRepository[Plan]) -> None:
-        self._schedule_repo = schedule_repo
-        self._plan_repo = plan_repo
+        self._schedule_repo: AsyncRepository[Schedule] = schedule_repo
+        self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, query: ListSchedulesQuery) -> list[Schedule]:
-        await _get_owned_plan(self._plan_repo, query.plan_id, query.user_id)
+        _ = await _get_owned_plan(self._plan_repo, query.plan_id, query.user_id)
         return [item async for item in self._schedule_repo.get_items(Eq("plan_id", query.plan_id))]

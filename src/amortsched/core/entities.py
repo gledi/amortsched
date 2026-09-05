@@ -55,8 +55,8 @@ class Schedule:
         return self._plan
 
     @plan.setter
-    def plan(self, plan: Plan | None) -> None:
-        self._plan = plan
+    def plan(self, value: Plan | None) -> None:  # pyright: ignore[reportPropertyTypeMismatch]
+        self._plan = value
 
 
 @dataclass(kw_only=True, slots=True)
@@ -111,8 +111,8 @@ class Plan:
         return self._user
 
     @user.setter
-    def user(self, user: User | None) -> None:
-        self._user = user
+    def user(self, value: User | None) -> None:  # pyright: ignore[reportPropertyTypeMismatch]
+        self._user = value
 
     def add_user(self, user: User) -> None:
         if user.id != self.user_id:
@@ -132,7 +132,7 @@ class Plan:
             raise ScheduleAssociationError(
                 schedule_id=schedule.id, expected_plan_id=schedule.plan_id, actual_plan_id=self.id
             )
-        schedule._plan = self
+        schedule.plan = self
         self._schedules.append(schedule)
 
     def to_schedule(self) -> AmortizationSchedule:
@@ -185,8 +185,8 @@ class Profile:
         return self._user
 
     @user.setter
-    def user(self, user: User | None) -> None:
-        self._user = user
+    def user(self, value: User | None) -> None:  # pyright: ignore[reportPropertyTypeMismatch]
+        self._user = value
 
     def touch(self) -> None:
         self.updated_at = now()
@@ -233,7 +233,7 @@ class User:
             )
         if self._profile is not None:
             raise DuplicateProfileError(user_id=self.id)
-        profile._user = self
+        profile.user = self
         self._profile = profile
 
     def add_plan(self, plan: Plan) -> None:
@@ -241,7 +241,7 @@ class User:
             raise PlanAssociationError(plan_id=plan.id, expected_user_id=plan.user_id, actual_user_id=self.id)
         if any(p.id == plan.id for p in self._plans):
             raise DuplicatePlanError(plan_id=plan.id, user_id=self.id)
-        plan._user = self
+        plan.user = self
         self._plans.append(plan)
 
     def add_plans(self, plans: Sequence[Plan]) -> None:

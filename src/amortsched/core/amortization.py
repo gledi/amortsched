@@ -2,6 +2,7 @@ import calendar
 import datetime
 from collections.abc import Generator
 from decimal import Decimal
+from typing import override
 
 from amortsched.core.errors import AmortizationError, InvalidExtraPaymentError, InvalidRecurringPaymentError
 from amortsched.core.values import (
@@ -40,21 +41,23 @@ class AmortizationSchedule:
         *,
         interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth,
     ) -> None:
-        self.amount = amount if isinstance(amount, Decimal) else Decimal(amount)
-        self.interest_rate = interest_rate if isinstance(interest_rate, Decimal) else Decimal(interest_rate)
+        self.amount: Decimal = amount if isinstance(amount, Decimal) else Decimal(amount)
+        self.interest_rate: Decimal = interest_rate if isinstance(interest_rate, Decimal) else Decimal(interest_rate)
         if isinstance(term, int):
             term = (term, 0)
-        self.term = Term(*term) if isinstance(term, tuple) else term
-        self.early_payment_fees = early_payment_fees if early_payment_fees is not None else EarlyPaymentFees()
-        self.interest_rate_application = interest_rate_application
+        self.term: Term = Term(*term) if isinstance(term, tuple) else term
+        self.early_payment_fees: EarlyPaymentFees = (
+            early_payment_fees if early_payment_fees is not None else EarlyPaymentFees()
+        )
+        self.interest_rate_application: InterestRateApplication = interest_rate_application
 
-        # Variable-rate support (optional). If empty, the base self.interest_rate is used.
         self.interest_rate_changes: list[InterestRateChange] = []
 
         self.one_time_extra_payments: list[OneTimeExtraPayment] = []
         self.recurring_extra_payments: list[RecurringExtraPayment] = []
         self._last_totals: ScheduleTotals | None = None
 
+    @override
     def __str__(self) -> str:
         term_parts = [f"{self.term.years} years"]
         if self.term.months > 0:
@@ -62,6 +65,7 @@ class AmortizationSchedule:
         term = " and ".join(term_parts)
         return f"{self.amount:,.2f} over {term} at {self.interest_rate:.2f}% yearly interest rate"
 
+    @override
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}(amount={self.amount:_.2f}, term={self.term!r}, "

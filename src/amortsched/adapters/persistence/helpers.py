@@ -1,15 +1,19 @@
-from collections.abc import Sequence
-from typing import Any, cast
+from collections.abc import Callable, Mapping, Sequence
+from typing import TypeVar, cast
 
 import sqlalchemy
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.schema import Table
 
 from amortsched.core.pagination import LimitOffset, PageSize, Pagination
+
+_T = TypeVar("_T")
 
 _TOTAL_COUNT_LABEL = "_amortsched_total_count"
 
 
-def build_postgres_upsert_statement(table, values: dict[str, object], conflict_columns: Sequence[str]):
+def build_postgres_upsert_statement(table: Table, values: Mapping[str, object], conflict_columns: Sequence[str]):
     insert_statement = postgresql_insert(table).values(**values)
     conflict_set = set(conflict_columns)
     update_values = {
@@ -22,7 +26,7 @@ def build_postgres_upsert_statement(table, values: dict[str, object], conflict_c
 
 
 def build_single_statement_paginated_query(
-    table, where_clause: Any, order_column_name: str, pagination: Pagination | None
+    table: Table, where_clause: ColumnElement[bool], order_column_name: str, pagination: Pagination | None
 ):
     requested_limit, offset = _resolve_limit_offset(pagination)
     filtered = (
@@ -57,7 +61,9 @@ def build_single_statement_paginated_query(
     return statement, requested_limit, offset
 
 
-def extract_paginated_items_and_total(rows: Sequence[Any], item_id_column_name: str, item_factory):
+def extract_paginated_items_and_total(
+    rows: Sequence[Mapping[str, object]], item_id_column_name: str, item_factory: Callable[[Mapping[str, object]], _T]
+) -> tuple[list[_T], int]:
     if not rows:
         return [], 0
 
@@ -69,7 +75,7 @@ def extract_paginated_items_and_total(rows: Sequence[Any], item_id_column_name: 
 def normalize_paginated_limit(limit: int | None, total: int) -> int:
     if limit is None:
         return total
-    return cast(int, limit)
+    return limit
 
 
 def _resolve_limit_offset(pagination: Pagination | None) -> tuple[int | None, int]:

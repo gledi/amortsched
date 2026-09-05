@@ -3,10 +3,10 @@ import secrets
 
 
 class PBKDF2PasswordHasher:
-    _DEFAULT_ITERATIONS = 600_000
+    _DEFAULT_ITERATIONS: int = 600_000
 
     def __init__(self, iterations: int | None = None) -> None:
-        self._iterations = iterations if iterations is not None else self._DEFAULT_ITERATIONS
+        self._iterations: int = iterations if iterations is not None else self._DEFAULT_ITERATIONS
 
     def hash(self, password: str) -> str:
         salt = secrets.token_hex(16)
@@ -20,14 +20,14 @@ class PBKDF2PasswordHasher:
 
 
 class ScryptPasswordHasher:
-    _n = _cost_factor = 2**14
-    _r = _block_size = 8
-    _p = _parallelization_factor = 1
+    _cost_factor: int = 2**14
+    _block_size: int = 8
+    _parallelization_factor: int = 1
 
     def __init__(self, n: int | None = None, r: int | None = None, p: int | None = None) -> None:
-        self._n = n if n is not None else self._n
-        self._r = r if r is not None else self._r
-        self._p = p if p is not None else self._p
+        self._n: int = n if n is not None else self._cost_factor
+        self._r: int = r if r is not None else self._block_size
+        self._p: int = p if p is not None else self._parallelization_factor
 
     def hash(self, password: str) -> str:
         salt = secrets.token_hex(16)

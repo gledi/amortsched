@@ -15,8 +15,8 @@ class Relationship:
     key: str
     table: Table
     entity: type
-    root_key_column: Column[Any]
-    related_key_column: Column[Any]
+    root_key_column: Column[Any]  # pyright: ignore[reportExplicitAny]
+    related_key_column: Column[Any]  # pyright: ignore[reportExplicitAny]
     many: bool = False
 
 

@@ -1,7 +1,7 @@
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import override
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +15,7 @@ class Specification[T]:
     def __invert__(self) -> Specification[T]:
         return Not(self)
 
-    def is_satisfied_by(self, candidate: T) -> bool:
+    def is_satisfied_by(self, _candidate: T) -> bool:
         raise NotImplementedError("Subclasses must implement is_satisfied_by()")
 
     def __call__(self, candidate: T) -> bool:
@@ -27,6 +27,7 @@ class And[T](Specification[T]):
     left: Specification[T]
     right: Specification[T]
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return self.left.is_satisfied_by(candidate) and self.right.is_satisfied_by(candidate)
 
@@ -36,6 +37,7 @@ class Or[T](Specification[T]):
     left: Specification[T]
     right: Specification[T]
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return self.left.is_satisfied_by(candidate) or self.right.is_satisfied_by(candidate)
 
@@ -44,6 +46,7 @@ class Or[T](Specification[T]):
 class Not[T](Specification[T]):
     spec: Specification[T]
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return not self.spec.is_satisfied_by(candidate)
 
@@ -51,53 +54,59 @@ class Not[T](Specification[T]):
 @dataclass(frozen=True, slots=True)
 class Eq[T](Specification[T]):
     field: str
-    value: Any
+    value: object
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        return getattr(candidate, self.field) == self.value
+        return getattr(candidate, self.field) == self.value  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
 class Gt[T](Specification[T]):
     field: str
-    value: Any
+    value: object
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        return getattr(candidate, self.field) > self.value
+        return getattr(candidate, self.field) > self.value  # type: ignore[operator]  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
 class Lt[T](Specification[T]):
     field: str
-    value: Any
+    value: object
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        return getattr(candidate, self.field) < self.value
+        return getattr(candidate, self.field) < self.value  # type: ignore[operator]  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
 class Ge[T](Specification[T]):
     field: str
-    value: Any
+    value: object
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        return getattr(candidate, self.field) >= self.value
+        return getattr(candidate, self.field) >= self.value  # type: ignore[operator]  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
 class Le[T](Specification[T]):
     field: str
-    value: Any
+    value: object
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        return getattr(candidate, self.field) <= self.value
+        return getattr(candidate, self.field) <= self.value  # type: ignore[operator]  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
 class In[T](Specification[T]):
     field: str
-    values: Sequence[Any]
+    values: Sequence[object]
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return getattr(candidate, self.field) in self.values
 
@@ -105,12 +114,13 @@ class In[T](Specification[T]):
 @dataclass(frozen=True, slots=True)
 class Between[T](Specification[T]):
     field: str
-    lower: Any
-    upper: Any
+    lower: object
+    upper: object
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        value = getattr(candidate, self.field)
-        return self.lower <= value <= self.upper
+        value = getattr(candidate, self.field)  # pyright: ignore[reportAny]
+        return self.lower <= value <= self.upper  # type: ignore[operator]  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,8 +128,9 @@ class StartsWith[T](Specification[T]):
     field: str
     prefix: str
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        return getattr(candidate, self.field).startswith(self.prefix)
+        return getattr(candidate, self.field).startswith(self.prefix)  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +138,7 @@ class Contains[T](Specification[T]):
     field: str
     substring: str
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return self.substring in getattr(candidate, self.field)
 
@@ -136,8 +148,9 @@ class EndsWith[T](Specification[T]):
     field: str
     suffix: str
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        return getattr(candidate, self.field).endswith(self.suffix)
+        return getattr(candidate, self.field).endswith(self.suffix)  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,15 +158,17 @@ class Like[T](Specification[T]):
     field: str
     pattern: str
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         re_pattern = self.pattern.replace("%", ".*").replace("_", ".")
-        return re.match(re_pattern, getattr(candidate, self.field)) is not None
+        return re.match(re_pattern, getattr(candidate, self.field)) is not None  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
 class IsNone[T](Specification[T]):
     field: str
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return getattr(candidate, self.field) is None
 
@@ -163,6 +178,7 @@ class Is[T](Specification[T]):
     field: str
     value: bool
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return getattr(candidate, self.field) is self.value
 
@@ -171,6 +187,7 @@ class Is[T](Specification[T]):
 class IsTrue[T](Specification[T]):
     field: str
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return getattr(candidate, self.field) is True
 
@@ -179,6 +196,7 @@ class IsTrue[T](Specification[T]):
 class IsFalse[T](Specification[T]):
     field: str
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return getattr(candidate, self.field) is False
 
@@ -187,6 +205,7 @@ class IsFalse[T](Specification[T]):
 class IsDeleted[T](Specification[T]):
     field: str = "is_deleted"
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return getattr(candidate, self.field) is True
 
@@ -195,17 +214,19 @@ class IsDeleted[T](Specification[T]):
 class IsActive[T](Specification[T]):
     field: str = "is_deleted"
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
         return getattr(candidate, self.field) is False
 
 
 @dataclass(frozen=True, slots=True)
 class Id[T](Specification[T]):
-    id: Any
+    id: object
     field: str = "id"
 
+    @override
     def is_satisfied_by(self, candidate: T) -> bool:
-        return getattr(candidate, self.field) == self.id
+        return getattr(candidate, self.field) == self.id  # pyright: ignore[reportAny]
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,12 +251,8 @@ class With[T](Specification[T]):
     """
 
     relation: str
-    spec: Specification[Any] | None = None
+    spec: Specification[object] | None = None
 
-    def is_satisfied_by(self, candidate: T) -> bool:
-        """
-        This specification is used to know which related entities to load, it doesn't filter the main entity.
-        Since the main entity is always loaded, this specification is always satisfied. The filtering happens in the
-        related entities, not in the main entity.
-        """
+    @override
+    def is_satisfied_by(self, _candidate: T) -> bool:
         return True
