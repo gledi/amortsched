@@ -36,6 +36,8 @@ export interface Plan {
   interest_rate: string | number;
   term: Term;
   start_date: string;
+  lender?: string | null;
+  upfront_fees?: string | number;
   early_payment_fees: EarlyPaymentFees;
   interest_rate_application: InterestRateApplication;
   status: PlanStatus;
@@ -44,6 +46,45 @@ export interface Plan {
   interest_rate_changes: InterestRateChange[];
   created_at: string;
   updated_at: string;
+}
+
+export interface AdjustmentCounts {
+  one_time_extra_payments: number;
+  recurring_extra_payments: number;
+  interest_rate_changes: number;
+}
+
+export interface PlanComparisonItem {
+  id: string;
+  name: string;
+  lender: string | null;
+  principal: string | number;
+  interest_rate: string | number;
+  term: Term;
+  start_date: string;
+  starting_monthly_payment: string | number;
+  configured_early_payment_fees: EarlyPaymentFees;
+  upfront_fees: string | number;
+  total_principal: string | number;
+  total_interest: string | number;
+  schedule_fees: string | number;
+  schedule_total_outflow: string | number;
+  total_cost: string | number;
+  payoff_months: number;
+  payoff_month: string;
+  paid_off: boolean;
+  adjustment_counts: AdjustmentCounts;
+}
+
+export type BestPlanIdsByMetric = Record<string, string[]>;
+
+export interface PlanComparison {
+  directly_comparable: boolean;
+  incomparability_reasons: string[];
+  overall_winner_plan_ids: string[];
+  savings_vs_next_best: string | number | null;
+  best_plan_ids_by_metric: BestPlanIdsByMetric;
+  plans: PlanComparisonItem[];
 }
 
 export interface Balance {

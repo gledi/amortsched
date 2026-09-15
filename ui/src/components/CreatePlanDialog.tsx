@@ -18,6 +18,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { plansApi, type CreatePlanPayload } from "@/lib/plans-api";
 import { toDateValue } from "@/lib/date-value";
+import { parsePlanOfferFields } from "@/lib/plan-offer-values";
 import { PlusIcon } from "lucide-react";
 import type { InterestRateApplication, Plan } from "@/lib/types";
 
@@ -38,6 +39,8 @@ export function CreatePlanDialog({ onPlanCreated, trigger }: CreatePlanDialogPro
   const [years, setYears] = useState("30");
   const [months, setMonths] = useState("0");
   const [startDate, setStartDate] = useState(() => toDateValue(new Date()));
+  const [lender, setLender] = useState("");
+  const [upfrontFees, setUpfrontFees] = useState("0");
   const [fixedFee, setFixedFee] = useState("0");
   const [percentFee, setPercentFee] = useState("0");
   const [application, setApplication] = useState<InterestRateApplication>("whole_month");
@@ -49,6 +52,8 @@ export function CreatePlanDialog({ onPlanCreated, trigger }: CreatePlanDialogPro
     setYears("30");
     setMonths("0");
     setStartDate(toDateValue(new Date()));
+    setLender("");
+    setUpfrontFees("0");
     setFixedFee("0");
     setPercentFee("0");
     setApplication("whole_month");
@@ -81,6 +86,12 @@ export function CreatePlanDialog({ onPlanCreated, trigger }: CreatePlanDialogPro
       return;
     }
 
+    const offerFields = parsePlanOfferFields(lender, upfrontFees);
+    if ("error" in offerFields) {
+      setError(offerFields.error);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -94,6 +105,7 @@ export function CreatePlanDialog({ onPlanCreated, trigger }: CreatePlanDialogPro
           months: numMonths,
         },
         start_date: startDate || undefined,
+        ...offerFields,
         early_payment_fees: {
           fixed: parseFloat(fixedFee) || 0,
           percent: parseFloat(percentFee) || 0,
@@ -176,6 +188,30 @@ export function CreatePlanDialog({ onPlanCreated, trigger }: CreatePlanDialogPro
                   value={interestRate}
                   onChange={(e) => setInterestRate(e.target.value)}
                   required
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="plan-lender">Lender</FieldLabel>
+                <Input
+                  id="plan-lender"
+                  value={lender}
+                  onChange={(event) => setLender(event.target.value)}
+                  placeholder="Bank name"
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="plan-upfront-fees">Upfront Fees</FieldLabel>
+                <Input
+                  id="plan-upfront-fees"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={upfrontFees}
+                  onChange={(event) => setUpfrontFees(event.target.value)}
                 />
               </Field>
             </div>

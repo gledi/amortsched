@@ -17,6 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { plansApi, type UpdatePlanPayload } from "@/lib/plans-api";
+import { parsePlanOfferFields } from "@/lib/plan-offer-values";
 import { Edit3Icon } from "lucide-react";
 import type { InterestRateApplication, Plan } from "@/lib/types";
 
@@ -37,6 +38,8 @@ export function EditPlanDialog({ plan, onPlanUpdated, trigger }: EditPlanDialogP
   const [years, setYears] = useState(String(plan.term.years));
   const [months, setMonths] = useState(String(plan.term.months));
   const [startDate, setStartDate] = useState(plan.start_date);
+  const [lender, setLender] = useState(plan.lender ?? "");
+  const [upfrontFees, setUpfrontFees] = useState(String(plan.upfront_fees ?? "0"));
   const [fixedFee, setFixedFee] = useState(String(plan.early_payment_fees?.fixed ?? "0"));
   const [percentFee, setPercentFee] = useState(String(plan.early_payment_fees?.percent ?? "0"));
   const [application, setApplication] = useState<InterestRateApplication>(
@@ -50,6 +53,8 @@ export function EditPlanDialog({ plan, onPlanUpdated, trigger }: EditPlanDialogP
     setYears(String(plan.term.years));
     setMonths(String(plan.term.months));
     setStartDate(plan.start_date);
+    setLender(plan.lender ?? "");
+    setUpfrontFees(String(plan.upfront_fees ?? "0"));
     setFixedFee(String(plan.early_payment_fees?.fixed ?? "0"));
     setPercentFee(String(plan.early_payment_fees?.percent ?? "0"));
     setApplication(plan.interest_rate_application || "whole_month");
@@ -87,6 +92,12 @@ export function EditPlanDialog({ plan, onPlanUpdated, trigger }: EditPlanDialogP
       return;
     }
 
+    const offerFields = parsePlanOfferFields(lender, upfrontFees);
+    if ("error" in offerFields) {
+      setError(offerFields.error);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -100,6 +111,7 @@ export function EditPlanDialog({ plan, onPlanUpdated, trigger }: EditPlanDialogP
           months: numMonths,
         },
         start_date: startDate || undefined,
+        ...offerFields,
         early_payment_fees: {
           fixed: parseFloat(fixedFee) || 0,
           percent: parseFloat(percentFee) || 0,
@@ -173,6 +185,30 @@ export function EditPlanDialog({ plan, onPlanUpdated, trigger }: EditPlanDialogP
                   value={interestRate}
                   onChange={(e) => setInterestRate(e.target.value)}
                   required
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="edit-plan-lender">Lender</FieldLabel>
+                <Input
+                  id="edit-plan-lender"
+                  value={lender}
+                  onChange={(event) => setLender(event.target.value)}
+                  placeholder="Bank name"
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="edit-plan-upfront-fees">Upfront Fees</FieldLabel>
+                <Input
+                  id="edit-plan-upfront-fees"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={upfrontFees}
+                  onChange={(event) => setUpfrontFees(event.target.value)}
                 />
               </Field>
             </div>

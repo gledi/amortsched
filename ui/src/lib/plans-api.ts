@@ -1,10 +1,5 @@
 import { api } from "./api-client";
-import type {
-  Plan,
-  Schedule,
-  User,
-  InterestRateApplication,
-} from "./types";
+import type { Plan, PlanComparison, Schedule, User, InterestRateApplication } from "./types";
 
 export interface CreatePlanPayload {
   name: string;
@@ -15,6 +10,8 @@ export interface CreatePlanPayload {
     months: number;
   };
   start_date?: string;
+  lender?: string | null;
+  upfront_fees?: number;
   early_payment_fees?: {
     fixed: number;
     percent: number;
@@ -31,6 +28,8 @@ export interface UpdatePlanPayload {
     months: number;
   };
   start_date?: string;
+  lender?: string | null;
+  upfront_fees?: number;
   early_payment_fees?: {
     fixed: number;
     percent: number;
@@ -44,6 +43,12 @@ export const plansApi = {
   listPlans: () => api<Plan[]>("/plans"),
 
   getPlan: (planId: string) => api<Plan>(`/plans/${planId}`),
+
+  previewComparison: (planIds: string[]) =>
+    api<PlanComparison>("/plan-comparisons/preview", {
+      method: "POST",
+      body: { plan_ids: planIds },
+    }),
 
   createPlan: (data: CreatePlanPayload) =>
     api<Plan>("/plans", {
@@ -73,34 +78,26 @@ export const plansApi = {
       body: data,
     }),
 
-  addRecurringExtraPayment: (
-    planId: string,
-    data: { start_date: string; amount: number; count: number },
-  ) =>
+  addRecurringExtraPayment: (planId: string, data: { start_date: string; amount: number; count: number }) =>
     api<Plan>(`/plans/${planId}/recurring-extra-payments`, {
       method: "POST",
       body: data,
     }),
 
-  addInterestRateChange: (
-    planId: string,
-    data: { effective_date: string; rate: number },
-  ) =>
+  addInterestRateChange: (planId: string, data: { effective_date: string; rate: number }) =>
     api<Plan>(`/plans/${planId}/interest-rate-changes`, {
       method: "POST",
       body: data,
     }),
 
-  listSchedules: (planId: string) =>
-    api<Schedule[]>(`/plans/${planId}/schedules`),
+  listSchedules: (planId: string) => api<Schedule[]>(`/plans/${planId}/schedules`),
 
   generateSchedule: (planId: string) =>
     api<Schedule>(`/plans/${planId}/schedules`, {
       method: "POST",
     }),
 
-  getSchedule: (planId: string, scheduleId: string) =>
-    api<Schedule>(`/plans/${planId}/schedules/${scheduleId}`),
+  getSchedule: (planId: string, scheduleId: string) => api<Schedule>(`/plans/${planId}/schedules/${scheduleId}`),
 
   saveSchedule: (planId: string, scheduleId: string) =>
     api<Schedule>(`/plans/${planId}/schedules/${scheduleId}/save`, {
