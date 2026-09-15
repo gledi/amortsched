@@ -8,6 +8,7 @@ from amortsched.api.config import get_settings
 from amortsched.api.errors import domain_error_handler
 from amortsched.api.middleware import RequestLoggingMiddleware
 from amortsched.api.routes.auth import router as auth_router
+from amortsched.api.routes.comparisons import router as comparisons_router
 from amortsched.api.routes.plans import router as plans_router
 from amortsched.api.routes.schedules import router as schedules_router
 from amortsched.api.routes.users import router as users_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(users_router)
     app.include_router(plans_router)
+    app.include_router(comparisons_router)
     app.include_router(schedules_router)
     return app
 

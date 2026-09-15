@@ -1,0 +1,111 @@
+import uuid
+
+import pytest
+
+
+async def create_offer(client, auth_headers, name: str, upfront_fees: str, amount: str = "1200") -> str:
+    response = await client.post(
+        "/api/plans",
+        json={
+            "name": name,
+            "amount": amount,
+            "interest_rate": "0",
+            "term": {"years": 1},
+            "upfront_fees": upfront_fees,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+@pytest.mark.anyio
+async def test_preview_compares_plans_without_saving_schedules(client, auth_headers):
+    first_id = await create_offer(client, auth_headers, "Alpha", "100")
+    second_id = await create_offer(client, auth_headers, "Beta", "20")
+
+    response = await client.post(
+        "/api/plan-comparisons/preview",
+        json={"plan_ids": [second_id, first_id]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body["plans"]] == [second_id, first_id]
+    assert body["overall_winner_plan_ids"] == [second_id]
+    assert body["plans"][0]["total_cost"] == "1220.00"
+
+    for plan_id in (first_id, second_id):
+        schedules = await client.get(f"/api/plans/{plan_id}/schedules", headers=auth_headers)
+        assert schedules.json() == []
+
+
+@pytest.mark.anyio
+async def test_preview_accepts_four_plans_and_preserves_order(client, auth_headers):
+    plan_ids = [await create_offer(client, auth_headers, f"Offer {index}", str(index)) for index in range(4)]
+
+    response = await client.post(
+        "/api/plan-comparisons/preview",
+        json={"plan_ids": plan_ids[::-1]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["plans"]] == plan_ids[::-1]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "plan_ids",
+    [
+        [str(uuid.uuid4())],
+        [str(uuid.uuid4()) for _ in range(5)],
+        ["00000000-0000-0000-0000-000000000001"] * 2,
+        ["not-a-uuid", "00000000-0000-0000-0000-000000000001"],
+    ],
+)
+async def test_preview_rejects_invalid_selection_shape(client, auth_headers, plan_ids):
+    response = await client.post(
+        "/api/plan-comparisons/preview",
+        json={"plan_ids": plan_ids},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_preview_marks_different_principals_incomparable(client, auth_headers):
+    lower_id = await create_offer(client, auth_headers, "Lower", "0", amount="1000")
+    higher_id = await create_offer(client, auth_headers, "Higher", "0", amount="1200")
+
+    response = await client.post(
+        "/api/plan-comparisons/preview",
+        json={"plan_ids": [lower_id, higher_id]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["directly_comparable"] is False
+    assert body["incomparability_reasons"] == ["Principal amounts differ"]
+    assert body["overall_winner_plan_ids"] == []
+    assert body["savings_vs_next_best"] is None
+
+
+@pytest.mark.anyio
+async def test_preview_hides_another_users_plan_ownership(client, auth_headers, register_user):
+    owned_id = await create_offer(client, auth_headers, "Owned", "0")
+    other_token = await register_user(client, "other@example.com")
+    other_headers = {"Authorization": f"Bearer {other_token}"}
+    unowned_id = await create_offer(client, other_headers, "Unowned", "0")
+
+    response = await client.post(
+        "/api/plan-comparisons/preview",
+        json={"plan_ids": [owned_id, unowned_id]},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    assert "own" not in response.json()["detail"].lower()

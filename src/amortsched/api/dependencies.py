@@ -36,6 +36,7 @@ from amortsched.app.commands.users import (
     UpsertProfileHandler,
 )
 from amortsched.app.ports import Settings
+from amortsched.app.queries.comparisons import ComparePlansHandler
 from amortsched.app.queries.plans import GetPlanHandler, ListPlansHandler
 from amortsched.app.queries.schedules import GenerateScheduleHandler, GetScheduleHandler, ListSchedulesHandler
 from amortsched.app.queries.users import GetProfileHandler, GetUserHandler
@@ -233,6 +234,13 @@ def get_list_plans_handler(repo: PlanRepo) -> ListPlansHandler:
 
 type GetPlan = Annotated[GetPlanHandler, Depends(get_get_plan_handler)]
 type ListPlans = Annotated[ListPlansHandler, Depends(get_list_plans_handler)]
+
+
+def get_compare_plans_handler(repo: PlanRepo) -> ComparePlansHandler:
+    return ComparePlansHandler(plan_repo=repo)
+
+
+type ComparePlans = Annotated[ComparePlansHandler, Depends(get_compare_plans_handler)]
 
 
 def get_generate_schedule_handler(plans: PlanRepo, schedules: ScheduleRepo) -> GenerateScheduleHandler:
