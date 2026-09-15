@@ -28,7 +28,7 @@ class Month(enum.IntEnum):
     December = 12
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(frozen=True, kw_only=True, slots=True)
 class EarlyPaymentFees:
     fixed: Amount = Decimal("0.00")
     percent: Amount = Decimal("0.00")
@@ -99,7 +99,7 @@ class ScheduleTotals:
         return self.principal + self.interest + self.fees
 
 
-@dataclass
+@dataclass(frozen=True)
 class Term:
     years: int
     months: int = 0
@@ -110,8 +110,8 @@ class Term:
         total_months = self.years * 12 + self.months
         if total_months == 0:
             raise InvalidTermError("Term must be at least one month", self)
-        self.years = total_months // 12
-        self.months = total_months % 12
+        object.__setattr__(self, "years", total_months // 12)
+        object.__setattr__(self, "months", total_months % 12)
 
     @property
     def periods(self) -> int:

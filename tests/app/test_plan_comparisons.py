@@ -1,8 +1,9 @@
 import datetime
 import uuid
 from collections.abc import AsyncIterator, Sequence
+from dataclasses import FrozenInstanceError
 from decimal import Decimal
-from typing import Never
+from typing import Never, cast
 
 import pytest
 
@@ -334,3 +335,36 @@ async def test_compare_plans_exposes_hand_derived_cost_totals():
     assert item.schedule_total_outflow == Decimal("1200.00")
     assert item.total_cost == Decimal("1225.00")
     assert item.payoff_month == "2026-12"
+
+
+@pytest.mark.anyio
+async def test_compare_plans_rejects_metric_mapping_mutation():
+    first = make_plan(name="First")
+    second = make_plan(name="Second")
+
+    result = await ComparePlansHandler(ReadOnlyPlanRepo([first, second])).handle(
+        ComparePlansQuery(plan_ids=(first.id, second.id), user_id=first.user_id)
+    )
+
+    with pytest.raises(TypeError):
+        cast(dict[str, tuple[uuid.UUID, ...]], result.best_plan_ids_by_metric)["total_cost"] = ()
+
+
+@pytest.mark.anyio
+async def test_compare_plans_returns_immutable_term_and_fee_snapshots():
+    first = make_plan(name="First")
+    second = make_plan(name="Second")
+
+    result = await ComparePlansHandler(ReadOnlyPlanRepo([first, second])).handle(
+        ComparePlansQuery(plan_ids=(first.id, second.id), user_id=first.user_id)
+    )
+    item = result.plans[0]
+
+    assert item.term is not first.term
+    assert item.configured_early_payment_fees is not first.early_payment_fees
+    with pytest.raises(FrozenInstanceError):
+        item.term.years = 2  # pyright: ignore[reportAttributeAccessIssue]
+    with pytest.raises(FrozenInstanceError):
+        item.configured_early_payment_fees.fixed = Decimal("9.00")  # pyright: ignore[reportAttributeAccessIssue]
+    assert first.term.years == 1
+    assert first.early_payment_fees.fixed == Decimal("2.00")

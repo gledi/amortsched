@@ -1,8 +1,9 @@
 import datetime
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
+from types import MappingProxyType
 
 from amortsched.core.entities import Plan
 from amortsched.core.errors import PlanNotFoundError, ValidationError
@@ -46,7 +47,7 @@ class PlanComparison:
     incomparability_reasons: tuple[str, ...]
     overall_winner_plan_ids: tuple[uuid.UUID, ...]
     savings_vs_next_best: Decimal | None
-    best_plan_ids_by_metric: dict[str, tuple[uuid.UUID, ...]]
+    best_plan_ids_by_metric: Mapping[str, tuple[uuid.UUID, ...]]
     plans: tuple[PlanComparisonItem, ...]
 
 
@@ -107,7 +108,7 @@ class ComparePlansHandler:
             incomparability_reasons=tuple(reasons),
             overall_winner_plan_ids=overall_winner_plan_ids,
             savings_vs_next_best=savings_vs_next_best,
-            best_plan_ids_by_metric=best_plan_ids_by_metric,
+            best_plan_ids_by_metric=MappingProxyType(best_plan_ids_by_metric),
             plans=items,
         )
 
@@ -136,10 +137,13 @@ class ComparePlansHandler:
             lender=plan.lender,
             principal=plan.amount,
             interest_rate=plan.interest_rate,
-            term=plan.term,
+            term=Term(plan.term.years, plan.term.months),
             start_date=plan.start_date,
             starting_monthly_payment=first_scheduled.payment.total,
-            configured_early_payment_fees=plan.early_payment_fees,
+            configured_early_payment_fees=EarlyPaymentFees(
+                fixed=plan.early_payment_fees.fixed,
+                percent=plan.early_payment_fees.percent,
+            ),
             upfront_fees=plan.upfront_fees,
             total_principal=totals.principal,
             total_interest=totals.interest,
