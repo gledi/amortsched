@@ -36,6 +36,7 @@ class PlanComparisonItem:
     schedule_fees: Decimal
     schedule_total_outflow: Decimal
     total_cost: Decimal
+    payoff_months: int
     payoff_month: str
     paid_off: bool
     adjustment_counts: AdjustmentCounts
@@ -150,6 +151,7 @@ class ComparePlansHandler:
             schedule_fees=totals.fees,
             schedule_total_outflow=schedule_total_outflow,
             total_cost=schedule_total_outflow + plan.upfront_fees,
+            payoff_months=totals.months,
             payoff_month=f"{last_installment.year:04d}-{int(last_installment.month):02d}",
             paid_off=totals.paid_off,
             adjustment_counts=AdjustmentCounts(

@@ -1,6 +1,31 @@
+import datetime
 import uuid
+from decimal import Decimal
 
 import pytest
+
+from amortsched.api.dependencies import get_plan_repo
+from amortsched.core.entities import Plan, Schedule
+from amortsched.core.values import Term
+
+
+class InvalidSchedulePlan(Plan):
+    __slots__ = ()
+
+    def generate(self) -> Schedule:
+        return Schedule(plan_id=self.id, installments=[], totals=None)
+
+
+class ComparisonPlanRepo:
+    def __init__(self, plans: list[Plan]) -> None:
+        self._plans = plans
+
+    def get_items(self, *_args, **_kwargs):
+        async def items():
+            for plan in self._plans:
+                yield plan
+
+        return items()
 
 
 async def create_offer(client, auth_headers, name: str, upfront_fees: str, amount: str = "1200") -> str:
@@ -35,6 +60,7 @@ async def test_preview_compares_plans_without_saving_schedules(client, auth_head
     assert [item["id"] for item in body["plans"]] == [second_id, first_id]
     assert body["overall_winner_plan_ids"] == [second_id]
     assert body["plans"][0]["total_cost"] == "1220.00"
+    assert body["plans"][0]["payoff_months"] == 12
 
     for plan_id in (first_id, second_id):
         schedules = await client.get(f"/api/plans/{plan_id}/schedules", headers=auth_headers)
@@ -109,3 +135,50 @@ async def test_preview_hides_another_users_plan_ownership(client, auth_headers, 
 
     assert response.status_code == 404
     assert "own" not in response.json()["detail"].lower()
+
+
+@pytest.mark.anyio
+async def test_preview_returns_422_when_generation_fails_without_saving_schedules(client, auth_headers):
+    first_id = await create_offer(client, auth_headers, "Valid", "0")
+    second_id = await create_offer(client, auth_headers, "Invalid", "0")
+    first_plan = await client.get(f"/api/plans/{first_id}", headers=auth_headers)
+    second_plan = await client.get(f"/api/plans/{second_id}", headers=auth_headers)
+
+    valid = Plan(
+        id=uuid.UUID(first_plan.json()["id"]),
+        user_id=uuid.UUID(first_plan.json()["user_id"]),
+        name="Valid",
+        slug="valid",
+        amount=Decimal("1200"),
+        term=Term(1),
+        interest_rate=Decimal("0"),
+        start_date=datetime.date(2026, 1, 1),
+    )
+    invalid = InvalidSchedulePlan(
+        id=uuid.UUID(second_plan.json()["id"]),
+        user_id=uuid.UUID(second_plan.json()["user_id"]),
+        name="Invalid",
+        slug="invalid",
+        amount=Decimal("1200"),
+        term=Term(1),
+        interest_rate=Decimal("0"),
+        start_date=datetime.date(2026, 1, 1),
+    )
+    app = client._transport.app
+    app.dependency_overrides[get_plan_repo] = lambda: ComparisonPlanRepo([valid, invalid])
+    try:
+        response = await client.post(
+            "/api/plan-comparisons/preview",
+            json={"plan_ids": [first_id, second_id]},
+            headers=auth_headers,
+        )
+    finally:
+        app.dependency_overrides.pop(get_plan_repo)
+
+    assert response.status_code == 422
+    assert response.json()["errors"] == [
+        {"field": "plan_ids", "message": "A selected plan could not produce comparison totals"}
+    ]
+    for plan_id in (first_id, second_id):
+        schedules = await client.get(f"/api/plans/{plan_id}/schedules", headers=auth_headers)
+        assert schedules.json() == []

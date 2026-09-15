@@ -334,6 +334,7 @@ async def test_compare_plans_exposes_hand_derived_cost_totals():
     assert item.schedule_fees == Decimal("0.00")
     assert item.schedule_total_outflow == Decimal("1200.00")
     assert item.total_cost == Decimal("1225.00")
+    assert item.payoff_months == 12
     assert item.payoff_month == "2026-12"
 
 

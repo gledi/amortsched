@@ -40,6 +40,7 @@ class PlanComparisonItemResponse(BaseModel):
     schedule_fees: Decimal
     schedule_total_outflow: Decimal
     total_cost: Decimal
+    payoff_months: int
     payoff_month: str
     paid_off: bool
     adjustment_counts: AdjustmentCountsResponse
@@ -65,6 +66,7 @@ class PlanComparisonItemResponse(BaseModel):
             schedule_fees=item.schedule_fees,
             schedule_total_outflow=item.schedule_total_outflow,
             total_cost=item.total_cost.quantize(Decimal("0.01")),
+            payoff_months=item.payoff_months,
             payoff_month=item.payoff_month,
             paid_off=item.paid_off,
             adjustment_counts=AdjustmentCountsResponse(
