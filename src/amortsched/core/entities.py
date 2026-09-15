@@ -87,6 +87,8 @@ class Plan:
     term: Term
     interest_rate: Decimal
     start_date: datetime.date
+    lender: str | None = None
+    upfront_fees: Decimal = Decimal("0.00")
     early_payment_fees: EarlyPaymentFees = field(default_factory=EarlyPaymentFees)
     interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth
     status: Status = Status.Draft

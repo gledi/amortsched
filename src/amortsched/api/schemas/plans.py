@@ -48,6 +48,8 @@ class CreatePlanRequest(BaseModel):
     interest_rate: Decimal = Field(ge=0, le=100)
     term: TermSchema
     start_date: datetime.date | None = None
+    lender: str | None = Field(default=None, max_length=200)
+    upfront_fees: Decimal = Field(default=Decimal("0.00"), ge=0)
     early_payment_fees: EarlyPaymentFeesSchema = Field(default_factory=EarlyPaymentFeesSchema)
     interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth
 
@@ -60,6 +62,8 @@ class UpdatePlanRequest(BaseModel):
     interest_rate: Decimal | None = Field(default=None, ge=0, le=100)
     term: TermSchema | None = None
     start_date: datetime.date | None = None
+    lender: str | None = Field(default=None, max_length=200)
+    upfront_fees: Decimal | None = Field(default=None, ge=0)
     early_payment_fees: EarlyPaymentFeesSchema | None = None
     interest_rate_application: InterestRateApplication | None = None
 
@@ -89,6 +93,8 @@ class PlanResponse(BaseModel):
     interest_rate: Decimal
     term: TermSchema
     start_date: datetime.date
+    lender: str | None
+    upfront_fees: Decimal
     early_payment_fees: EarlyPaymentFeesSchema
     interest_rate_application: str
     status: str
@@ -109,6 +115,8 @@ class PlanResponse(BaseModel):
             interest_rate=plan.interest_rate,
             term=TermSchema(years=plan.term.years, months=plan.term.months),
             start_date=plan.start_date,
+            lender=plan.lender,
+            upfront_fees=plan.upfront_fees,
             early_payment_fees=EarlyPaymentFeesSchema(
                 fixed=Decimal(plan.early_payment_fees.fixed),
                 percent=Decimal(plan.early_payment_fees.percent),

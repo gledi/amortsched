@@ -51,6 +51,8 @@ async def create_plan(
         term=Term(body.term.years, body.term.months),
         interest_rate=body.interest_rate,
         start_date=body.start_date or today(),
+        lender=body.lender,
+        upfront_fees=body.upfront_fees,
         early_payment_fees=EarlyPaymentFees(
             fixed=body.early_payment_fees.fixed, percent=body.early_payment_fees.percent
         ),
@@ -95,6 +97,8 @@ async def update_plan(
         interest_rate=body.interest_rate,
         term=Term(body.term.years, body.term.months) if body.term else None,
         start_date=body.start_date,
+        lender=body.lender,
+        upfront_fees=body.upfront_fees,
         early_payment_fees=EarlyPaymentFees(
             fixed=body.early_payment_fees.fixed, percent=body.early_payment_fees.percent
         )

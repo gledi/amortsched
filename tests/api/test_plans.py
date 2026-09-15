@@ -20,6 +20,54 @@ async def test_create_plan(client, auth_headers):
 
 
 @pytest.mark.anyio
+async def test_create_plan_includes_offer_fields(client, auth_headers):
+    response = await client.post(
+        "/api/plans",
+        json={
+            "name": "Thirty-year fixed",
+            "lender": "  Bank Alpha  ",
+            "upfront_fees": "1250.00",
+            "amount": "300000",
+            "interest_rate": "5.75",
+            "term": {"years": 30, "months": 0},
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["lender"] == "Bank Alpha"
+    assert response.json()["upfront_fees"] == "1250.00"
+
+
+@pytest.mark.anyio
+async def test_update_plan_clears_blank_lender_and_rejects_negative_upfront_fees(client, auth_headers):
+    created = await client.post(
+        "/api/plans",
+        json={
+            "name": "Offer",
+            "lender": "Bank Alpha",
+            "amount": "100000",
+            "interest_rate": "4.5",
+            "term": {"years": 15},
+        },
+        headers=auth_headers,
+    )
+    plan_id = created.json()["id"]
+
+    cleared = await client.patch(
+        f"/api/plans/{plan_id}",
+        json={"lender": "   ", "upfront_fees": "900.00"},
+        headers=auth_headers,
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["lender"] is None
+    assert cleared.json()["upfront_fees"] == "900.00"
+
+    rejected = await client.patch(f"/api/plans/{plan_id}", json={"upfront_fees": "-0.01"}, headers=auth_headers)
+    assert rejected.status_code == 422
+
+
+@pytest.mark.anyio
 async def test_list_plans(client, auth_headers):
     await client.post(
         "/api/plans",

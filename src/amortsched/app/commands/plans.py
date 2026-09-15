@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from amortsched.app.access import get_owned_plan, get_owned_schedule
 from amortsched.core.entities import Plan, Schedule
+from amortsched.core.errors import ValidationError
 from amortsched.core.repositories import AsyncRepository
 from amortsched.core.specifications import Id
 from amortsched.core.values import (
@@ -23,6 +24,20 @@ _get_owned_plan = get_owned_plan
 _get_owned_schedule = get_owned_schedule
 
 
+def _validate_upfront_fees(upfront_fees: Decimal) -> Decimal:
+    fees = Decimal(upfront_fees)
+    if fees < 0:
+        raise ValidationError([{"field": "upfront_fees", "message": "Upfront fees must be zero or greater"}])
+    return fees
+
+
+def _apply_offer_fields(plan: Plan, lender: str | None, upfront_fees: Decimal | None) -> None:
+    if lender is not None:
+        plan.lender = lender.strip() or None
+    if upfront_fees is not None:
+        plan.upfront_fees = _validate_upfront_fees(upfront_fees)
+
+
 @dataclass(frozen=True, slots=True)
 class CreatePlanCommand:
     user_id: uuid.UUID
@@ -31,6 +46,8 @@ class CreatePlanCommand:
     term: TermType
     interest_rate: InterestRate
     start_date: datetime.date
+    lender: str | None = None
+    upfront_fees: Decimal | None = None
     early_payment_fees: EarlyPaymentFees | None = None
     interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth
 
@@ -50,6 +67,10 @@ class CreatePlanHandler:
             term = Term(*command.term)
         else:
             term = command.term
+        lender = (command.lender.strip() or None) if command.lender is not None else None
+        upfront_fees = _validate_upfront_fees(
+            Decimal("0.00") if command.upfront_fees is None else Decimal(command.upfront_fees)
+        )
         plan = Plan(
             user_id=command.user_id,
             name=command.name,
@@ -58,6 +79,8 @@ class CreatePlanHandler:
             term=term,
             interest_rate=interest_rate,
             start_date=command.start_date,
+            lender=lender,
+            upfront_fees=upfront_fees,
             early_payment_fees=command.early_payment_fees
             if command.early_payment_fees is not None
             else EarlyPaymentFees(),
@@ -76,6 +99,8 @@ class UpdatePlanCommand:
     term: TermType | None = None
     interest_rate: InterestRate | None = None
     start_date: datetime.date | None = None
+    lender: str | None = None
+    upfront_fees: Decimal | None = None
     early_payment_fees: EarlyPaymentFees | None = None
     interest_rate_application: InterestRateApplication | None = None
 
@@ -103,6 +128,7 @@ class UpdatePlanHandler:
             )
         if command.start_date is not None:
             plan.start_date = command.start_date
+        _apply_offer_fields(plan, command.lender, command.upfront_fees)
         if command.early_payment_fees is not None:
             plan.early_payment_fees = command.early_payment_fees
         if command.interest_rate_application is not None:

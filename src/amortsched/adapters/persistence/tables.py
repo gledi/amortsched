@@ -43,6 +43,13 @@ plans = sqlalchemy.Table(
     Column("term_months", sqlalchemy.Integer, nullable=False),
     Column("interest_rate", sqlalchemy.Numeric(precision=9, scale=6), nullable=False),
     Column("start_date", sqlalchemy.Date, nullable=False),
+    Column("lender", sqlalchemy.String(200), nullable=True),
+    Column(
+        "upfront_fees",
+        sqlalchemy.Numeric(precision=18, scale=2),
+        nullable=False,
+        server_default=sqlalchemy.text("0.00"),
+    ),
     Column("early_payment_fees", JSONB, nullable=False),
     Column("interest_rate_application", sqlalchemy.String, nullable=False),
     Column("status", sqlalchemy.String, nullable=False),
@@ -55,6 +62,7 @@ plans = sqlalchemy.Table(
     sqlalchemy.CheckConstraint("amount > 0", name="ck_plans_amount_positive"),
     sqlalchemy.CheckConstraint("term_years * 12 + term_months > 0", name="ck_plans_term_positive"),
     sqlalchemy.CheckConstraint("interest_rate >= 0 AND interest_rate <= 100", name="ck_plans_interest_rate_range"),
+    sqlalchemy.CheckConstraint("upfront_fees >= 0", name="ck_plans_upfront_fees_non_negative"),
     sqlalchemy.Index("ix_plans_user_id", "user_id"),
     sqlalchemy.Index("ix_plans_user_id_is_deleted", "user_id", "is_deleted"),
 )
