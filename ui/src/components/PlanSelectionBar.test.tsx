@@ -15,5 +15,8 @@ describe("PlanSelectionBar", () => {
     await userEvent.click(screen.getByRole("button", { name: "Compare" }));
     expect(onCompare).toHaveBeenCalledOnce();
     expect(screen.getByText("You can compare up to 4 plans.")).toBeVisible();
+
+    view.rerender(<PlanSelectionBar selectedCount={5} limitReached onCancel={vi.fn()} onCompare={onCompare} />);
+    expect(screen.getByRole("button", { name: "Compare" })).toBeDisabled();
   });
 });

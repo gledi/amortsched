@@ -203,14 +203,15 @@ async def test_compare_plans_rejects_duplicates():
 
 
 @pytest.mark.anyio
-async def test_compare_plans_rejects_missing_or_not_owned_selection():
+@pytest.mark.parametrize("missing", [False, True], ids=["unowned", "absent"])
+async def test_compare_plans_rejects_missing_or_not_owned_selection(missing: bool):
     owned = make_plan(name="Owned")
     unowned = make_plan(name="Unowned", user_id=OTHER_USER_ID)
     repo = ReadOnlyPlanRepo([owned, unowned])
 
     with pytest.raises(PlanNotFoundError) as exception:
         await ComparePlansHandler(repo).handle(
-            ComparePlansQuery(plan_ids=(owned.id, unowned.id), user_id=owned.user_id)
+            ComparePlansQuery(plan_ids=(owned.id, uuid.uuid4() if missing else unowned.id), user_id=owned.user_id)
         )
 
     assert exception.value.plan_id == "comparison selection"

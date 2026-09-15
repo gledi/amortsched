@@ -112,6 +112,7 @@ export function EditPlanDialog({ plan, onPlanUpdated, trigger }: EditPlanDialogP
         },
         start_date: startDate || undefined,
         ...offerFields,
+        lender: offerFields.lender ?? "",
         early_payment_fees: {
           fixed: parseFloat(fixedFee) || 0,
           percent: parseFloat(percentFee) || 0,

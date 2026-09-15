@@ -1,13 +1,7 @@
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
+import { ChartContainer, ChartLegendContent, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { ChartLegend, ChartTooltip } from "@/components/ui/chart-primitives";
 import { formatCurrency } from "@/lib/formatters";
 import type { PlanComparison } from "@/lib/types";
 
@@ -18,7 +12,7 @@ const chartConfig = {
 
 export function PlanCostChart({ comparison }: { comparison: PlanComparison }) {
   const data = comparison.plans.map((plan) => ({
-    label: plan.lender || plan.name,
+    label: plan.lender ? `${plan.lender} — ${plan.name}` : plan.name,
     scheduleOutflow: Number(plan.schedule_total_outflow),
     upfrontFees: Number(plan.upfront_fees),
   }));
@@ -33,7 +27,7 @@ export function PlanCostChart({ comparison }: { comparison: PlanComparison }) {
         <ChartContainer config={chartConfig} className="h-80 w-full">
           <BarChart accessibilityLayer data={data} margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
             <CartesianGrid vertical={false} />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} interval={0} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} interval={0} height={60} />
             <YAxis tickLine={false} axisLine={false} width={90} tickFormatter={(value) => formatCurrency(value)} />
             <ChartTooltip
               content={

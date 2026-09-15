@@ -100,8 +100,6 @@ ${colorConfig
   );
 };
 
-const ChartTooltip = RechartsPrimitive.Tooltip;
-
 function ChartTooltipContent({
   active,
   payload,
@@ -227,8 +225,6 @@ function ChartTooltipContent({
   );
 }
 
-const ChartLegend = RechartsPrimitive.Legend;
-
 function ChartLegendContent({
   className,
   hideIcon = false,
@@ -298,4 +294,4 @@ function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key:
   return configLabelKey in config ? config[configLabelKey] : config[key];
 }
 
-export { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, ChartStyle };
+export { ChartContainer, ChartTooltipContent, ChartLegendContent, ChartStyle };
