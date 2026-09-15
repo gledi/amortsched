@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppCompareRouteImport } from './routes/_app/compare'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
 import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
 import { Route as AppPlansPlanIdRouteImport } from './routes/_app/plans.$planId'
@@ -27,6 +28,11 @@ const AuthRoute = AuthRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCompareRoute = AppCompareRouteImport.update({
+  id: '/compare',
+  path: '/compare',
   getParentRoute: () => AppRoute,
 } as any)
 const AuthLoginRoute = AuthLoginRouteImport.update({
@@ -47,12 +53,14 @@ const AppPlansPlanIdRoute = AppPlansPlanIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/compare': typeof AppCompareRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
   '/plans/$planId': typeof AppPlansPlanIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
+  '/compare': typeof AppCompareRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
   '/plans/$planId': typeof AppPlansPlanIdRoute
@@ -61,6 +69,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/_auth': typeof AuthRouteWithChildren
+  '/_app/compare': typeof AppCompareRoute
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/register': typeof AuthRegisterRoute
   '/_app/': typeof AppIndexRoute
@@ -68,13 +77,14 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/register' | '/plans/$planId'
+  fullPaths: '/' | '/compare' | '/login' | '/register' | '/plans/$planId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/register' | '/plans/$planId'
+  to: '/' | '/compare' | '/login' | '/register' | '/plans/$planId'
   id:
     | '__root__'
     | '/_app'
     | '/_auth'
+    | '/_app/compare'
     | '/_auth/login'
     | '/_auth/register'
     | '/_app/'
@@ -109,6 +119,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/compare': {
+      id: '/_app/compare'
+      path: '/compare'
+      fullPath: '/compare'
+      preLoaderRoute: typeof AppCompareRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_auth/login': {
       id: '/_auth/login'
       path: '/login'
@@ -134,11 +151,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppCompareRoute: typeof AppCompareRoute
   AppIndexRoute: typeof AppIndexRoute
   AppPlansPlanIdRoute: typeof AppPlansPlanIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppCompareRoute: AppCompareRoute,
   AppIndexRoute: AppIndexRoute,
   AppPlansPlanIdRoute: AppPlansPlanIdRoute,
 }

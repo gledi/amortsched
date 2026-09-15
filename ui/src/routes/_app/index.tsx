@@ -5,14 +5,12 @@ import { plansApi } from "@/lib/plans-api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePlanDialog } from "@/components/CreatePlanDialog";
-import {
-  formatCurrency,
-  formatPercent,
-  formatTerm,
-  formatDate,
-} from "@/lib/formatters";
+import { PlanSelectionBar } from "@/components/PlanSelectionBar";
+import { formatCurrency, formatPercent, formatTerm, formatDate } from "@/lib/formatters";
 import type { Plan } from "@/lib/types";
+import { parsePlanIds, togglePlanSelection } from "@/lib/plan-selection";
 import {
   PlusIcon,
   LayersIcon,
@@ -28,12 +26,24 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    compare: typeof search.compare === "string" ? search.compare : undefined,
+  }),
   component: DashboardPage,
 });
 
 function DashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const search = Route.useSearch();
+  const selectionMode = typeof search.compare === "string";
+  const [selectedIds, setSelectedIds] = React.useState(() => parsePlanIds(search.compare));
+  const [limitReached, setLimitReached] = React.useState(false);
+
+  React.useEffect(() => {
+    setSelectedIds(parsePlanIds(search.compare));
+    setLimitReached(false);
+  }, [search.compare]);
 
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ["plans"],
@@ -43,9 +53,7 @@ function DashboardPage() {
   const deleteMutation = useMutation({
     mutationFn: plansApi.deletePlan,
     onSuccess: (_, planId) => {
-      queryClient.setQueryData<Plan[]>(["plans"], (prev = []) =>
-        prev.filter((p) => p.id !== planId)
-      );
+      queryClient.setQueryData<Plan[]>(["plans"], (prev = []) => prev.filter((p) => p.id !== planId));
     },
     onError: (err: any) => {
       alert(err?.message || "Failed to delete plan");
@@ -58,6 +66,27 @@ function DashboardPage() {
       to: "/plans/$planId",
       params: { planId: newPlan.id },
     });
+  }
+
+  function startSelection() {
+    router.navigate({ to: "/", search: { compare: "" } });
+  }
+
+  function toggleSelection(planId: string) {
+    const nextSelection = togglePlanSelection(selectedIds, planId);
+    setSelectedIds(nextSelection.ids);
+    setLimitReached(nextSelection.limitReached);
+    router.navigate({ to: "/", search: { compare: nextSelection.ids.join(",") } });
+  }
+
+  function cancelSelection() {
+    setSelectedIds([]);
+    setLimitReached(false);
+    router.navigate({ to: "/", search: { compare: undefined } });
+  }
+
+  function compareSelectedPlans() {
+    router.navigate({ to: "/compare", search: { plans: selectedIds.join(",") } });
   }
 
   const savedCount = plans.filter((p) => p.status === "saved").length;
@@ -77,7 +106,14 @@ function DashboardPage() {
             Model fixed-rate loans, prepayments, and interest rate changes with exact amortization schedules.
           </p>
         </div>
-        <CreatePlanDialog onPlanCreated={handlePlanCreated} />
+        {selectionMode ? null : (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={startSelection}>
+              Compare plans
+            </Button>
+            <CreatePlanDialog onPlanCreated={handlePlanCreated} />
+          </div>
+        )}
       </div>
 
       {/* Metrics Row */}
@@ -98,9 +134,7 @@ function DashboardPage() {
               <BookmarkCheckIcon className="size-3" />
               Saved Plans
             </CardDescription>
-            <CardTitle className="text-xl font-bold text-emerald-600">
-              {savedCount}
-            </CardTitle>
+            <CardTitle className="text-xl font-bold text-emerald-600">{savedCount}</CardTitle>
           </CardHeader>
         </Card>
 
@@ -110,9 +144,7 @@ function DashboardPage() {
               <LayersIcon className="size-3" />
               Draft Plans
             </CardDescription>
-            <CardTitle className="text-xl font-bold text-muted-foreground">
-              {draftCount}
-            </CardTitle>
+            <CardTitle className="text-xl font-bold text-muted-foreground">{draftCount}</CardTitle>
           </CardHeader>
         </Card>
 
@@ -122,9 +154,7 @@ function DashboardPage() {
               <DollarSignIcon className="size-3" />
               Total Portfolio Principal
             </CardDescription>
-            <CardTitle className="text-xl font-bold text-primary">
-              {formatCurrency(totalPrincipal)}
-            </CardTitle>
+            <CardTitle className="text-xl font-bold text-primary">{formatCurrency(totalPrincipal)}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -142,7 +172,8 @@ function DashboardPage() {
             </div>
             <h3 className="text-base font-semibold">No Loan Plans Yet</h3>
             <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-              Get started by creating a loan plan. You can specify term lengths, interest rates, extra payments, and calculate full amortization schedules.
+              Get started by creating a loan plan. You can specify term lengths, interest rates, extra payments, and
+              calculate full amortization schedules.
             </p>
             <div className="mt-6">
               <CreatePlanDialog onPlanCreated={handlePlanCreated} />
@@ -159,35 +190,56 @@ function DashboardPage() {
               (plan.interest_rate_changes?.length || 0);
 
             return (
-              <Card key={plan.id} className="flex flex-col justify-between hover:shadow-xs transition-shadow">
+              <Card
+                key={plan.id}
+                className="flex flex-col justify-between hover:shadow-xs transition-shadow"
+                role={selectionMode ? "checkbox" : undefined}
+                aria-checked={selectionMode ? selectedIds.includes(plan.id) : undefined}
+                tabIndex={selectionMode ? 0 : undefined}
+                onClick={selectionMode ? () => toggleSelection(plan.id) : undefined}
+                onKeyDown={
+                  selectionMode
+                    ? (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleSelection(plan.id);
+                        }
+                      }
+                    : undefined
+                }
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <CardTitle className="text-base font-semibold">
-                        <Link
-                          to="/plans/$planId"
-                          params={{ planId: plan.id }}
-                          className="hover:underline"
-                        >
-                          {plan.name}
-                        </Link>
+                        {selectionMode ? (
+                          plan.name
+                        ) : (
+                          <Link to="/plans/$planId" params={{ planId: plan.id }} className="hover:underline">
+                            {plan.name}
+                          </Link>
+                        )}
                       </CardTitle>
-                      <CardDescription className="mt-0.5 font-mono text-[11px]">
-                        {plan.slug}
-                      </CardDescription>
+                      <CardDescription className="mt-0.5 font-mono text-[11px]">{plan.slug}</CardDescription>
                     </div>
-                    <Badge variant={isDraft ? "outline" : "default"}>
-                      {isDraft ? "Draft" : "Saved"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {selectionMode ? (
+                        <Checkbox
+                          checked={selectedIds.includes(plan.id)}
+                          aria-hidden="true"
+                          tabIndex={-1}
+                          className="pointer-events-none"
+                        />
+                      ) : null}
+                      <Badge variant={isDraft ? "outline" : "default"}>{isDraft ? "Draft" : "Saved"}</Badge>
+                    </div>
                   </div>
                 </CardHeader>
 
                 <CardContent className="flex flex-col gap-3">
                   <div className="flex items-baseline justify-between border-b border-border/50 pb-2">
                     <span className="text-xs text-muted-foreground">Loan Amount:</span>
-                    <span className="font-mono text-lg font-bold text-primary">
-                      {formatCurrency(plan.amount)}
-                    </span>
+                    <span className="font-mono text-lg font-bold text-primary">{formatCurrency(plan.amount)}</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -195,27 +247,21 @@ function DashboardPage() {
                       <span className="text-muted-foreground flex items-center gap-1">
                         <PercentIcon className="size-3" /> Rate
                       </span>
-                      <span className="font-semibold">
-                        {formatPercent(plan.interest_rate)}
-                      </span>
+                      <span className="font-semibold">{formatPercent(plan.interest_rate)}</span>
                     </div>
 
                     <div className="flex flex-col gap-0.5">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <ClockIcon className="size-3" /> Term
                       </span>
-                      <span className="font-semibold">
-                        {formatTerm(plan.term)}
-                      </span>
+                      <span className="font-semibold">{formatTerm(plan.term)}</span>
                     </div>
 
                     <div className="flex flex-col gap-0.5">
                       <span className="text-muted-foreground flex items-center gap-1">
                         <CalendarIcon className="size-3" /> Starts
                       </span>
-                      <span className="font-semibold">
-                        {formatDate(plan.start_date)}
-                      </span>
+                      <span className="font-semibold">{formatDate(plan.start_date)}</span>
                     </div>
 
                     <div className="flex flex-col gap-0.5">
@@ -229,33 +275,43 @@ function DashboardPage() {
                   </div>
                 </CardContent>
 
-                <CardFooter className="flex items-center justify-between border-t border-border pt-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive px-2"
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to delete "${plan.name}"?`)) {
-                        deleteMutation.mutate(plan.id);
-                      }
-                    }}
-                  >
-                    <Trash2Icon data-icon="inline-start" />
-                    Delete
-                  </Button>
-
-                  <Link to="/plans/$planId" params={{ planId: plan.id }}>
-                    <Button size="sm">
-                      View Schedule
-                      <ArrowRightIcon data-icon="inline-end" />
+                {selectionMode ? null : (
+                  <CardFooter className="flex items-center justify-between border-t border-border pt-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive px-2"
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to delete "${plan.name}"?`)) {
+                          deleteMutation.mutate(plan.id);
+                        }
+                      }}
+                    >
+                      <Trash2Icon data-icon="inline-start" />
+                      Delete
                     </Button>
-                  </Link>
-                </CardFooter>
+
+                    <Link to="/plans/$planId" params={{ planId: plan.id }}>
+                      <Button size="sm">
+                        View Schedule
+                        <ArrowRightIcon data-icon="inline-end" />
+                      </Button>
+                    </Link>
+                  </CardFooter>
+                )}
               </Card>
             );
           })}
         </div>
       )}
+      {selectionMode ? (
+        <PlanSelectionBar
+          selectedCount={selectedIds.length}
+          limitReached={limitReached}
+          onCancel={cancelSelection}
+          onCompare={compareSelectedPlans}
+        />
+      ) : null}
     </div>
   );
 }
