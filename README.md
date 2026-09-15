@@ -14,7 +14,7 @@ Users own **plans** (`draft` → `saved`); each plan generates one or more **sch
 ## Stack
 
 - **Backend**: Python 3.14, FastAPI, SQLAlchemy (async) + psycopg, PostgreSQL, Alembic, Pydantic, structlog
-- **Auth**: OAuth2 password flow, JWT access tokens (python-jose), PBKDF2 password hashing, rotating DB-stored refresh tokens
+- **Auth**: OAuth2 password flow, PyJWT access tokens, PBKDF2 password hashing, rotating DB-stored refresh tokens
 - **Frontend** (`ui/`): React 19, Vite, TanStack Router + Query, Tailwind v4, Base UI, react-hook-form + zod
 - **Tooling**: uv, ruff, pytest + anyio + testcontainers, Docker Compose (Traefik, Postgres, Redis)
 
@@ -102,8 +102,8 @@ All under `/api`, JSON, bearer-token auth except register/token.
 | GET/PATCH/DELETE | `/plans/{id}` | Read / update / delete a plan |
 | POST | `/plans/{id}/save` | Promote draft → saved |
 | POST | `/plans/{id}/extra-payments` · `/recurring-extra-payments` · `/interest-rate-changes` | Add plan adjustments |
-| POST/GET | `/plans/{id}/schedules` | Generate / list schedules |
+| POST/GET | `/plans/{id}/schedules` | Generate and persist / list schedules |
 | GET/DELETE | `/plans/{id}/schedules/{sid}` | Read / delete a schedule |
-| POST | `/plans/{id}/schedules/{sid}/save` | Persist a generated schedule |
+| POST | `/plans/{id}/schedules/{sid}/save` | Idempotently confirm a generated schedule |
 
 Interactive docs at `/docs` when the API is running.

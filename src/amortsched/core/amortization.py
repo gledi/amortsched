@@ -25,9 +25,10 @@ from amortsched.core.values import (
 )
 
 
-def next_month(dt: datetime.date) -> datetime.date:
+def next_month(dt: datetime.date, base_day: int | None = None) -> datetime.date:
     year, month = (dt.year + 1, 1) if dt.month == 12 else (dt.year, dt.month + 1)
-    day = min(dt.day, calendar.monthrange(year, month)[1])
+    target_day = base_day if base_day is not None else dt.day
+    day = min(target_day, calendar.monthrange(year, month)[1])
     return datetime.date(year, month, day)
 
 
@@ -170,10 +171,11 @@ class AmortizationSchedule:
 
         for recurring in self.recurring_extra_payments:
             dt = recurring.start_date
+            base_day = recurring.start_date.day
             for _ in range(recurring.count):
                 if period_start <= dt <= period_end:
                     extras.append((PaymentKind.RecurringExtraPayment, dt, recurring.amount))
-                dt = next_month(dt)
+                dt = next_month(dt, base_day=base_day)
 
         # Stable sort by date, then kind name for deterministic ordering.
         return sorted(extras, key=lambda x: (x[1], str(x[0])))
@@ -251,9 +253,16 @@ class AmortizationSchedule:
         )
         return row, after
 
-    def _daily_rate_for_segment(self, *, period_start: datetime.date, segment_start: datetime.date) -> Decimal:
+    def _daily_rate_for_segment(
+        self,
+        *,
+        period_start: datetime.date,
+        period_end: datetime.date,
+        segment_start: datetime.date,
+    ) -> Decimal:
         if self.interest_rate_application == InterestRateApplication.WholeMonth:
-            return self._daily_rate_for_date(period_start)
+            days = (period_end - period_start).days
+            return self._monthly_rate_for_date(period_start) / Decimal(days)
 
         return self._daily_rate_for_date_with_application_limit(
             segment_start,
@@ -285,7 +294,11 @@ class AmortizationSchedule:
             days = (segment_end - segment_start).days
             if days <= 0:
                 continue
-            rate = self._daily_rate_for_segment(period_start=period_start, segment_start=segment_start)
+            rate = self._daily_rate_for_segment(
+                period_start=period_start,
+                period_end=period_end,
+                segment_start=segment_start,
+            )
             interest = balance * rate * Decimal(days)
             interest_total += interest
 
@@ -335,6 +348,7 @@ class AmortizationSchedule:
     def generate(self, start_date: datetime.date) -> Generator[Installment, None, None]:
         balance = self.amount
         date = start_date
+        base_day = start_date.day
         scheduled_payment_index = 0
         total_principal = Decimal("0.00")
         total_interest = Decimal("0.00")
@@ -343,7 +357,7 @@ class AmortizationSchedule:
 
         while balance > 0 and scheduled_payment_index < self.periods:
             period_start = date
-            period_end = next_month(date)
+            period_end = next_month(date, base_day=base_day)
 
             extras, balance, accrued_interest = self._accrue_interest_and_apply_extras(
                 period_start=period_start,
@@ -362,6 +376,8 @@ class AmortizationSchedule:
 
             scheduled_payment_index += 1
             principal = self.monthly_installment - accrued_interest
+            if scheduled_payment_index == self.periods:
+                principal = balance
             if principal > balance:
                 principal = balance
             scheduled = Payment(
@@ -392,6 +408,9 @@ class AmortizationSchedule:
             )
 
             date = period_end
+
+        if paid_off:
+            total_principal = self.amount
 
         self._last_totals = ScheduleTotals(
             principal=total_principal,

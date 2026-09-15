@@ -74,8 +74,8 @@ def extract_paginated_items_and_total(
 
 def normalize_paginated_limit(limit: int | None, total: int) -> int:
     if limit is None:
-        return total
-    return limit
+        return max(total, 1)
+    return max(limit, 1)
 
 
 def _resolve_limit_offset(pagination: Pagination | None) -> tuple[int | None, int]:

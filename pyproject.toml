@@ -84,6 +84,7 @@ branch = true
 show_missing = true
 
 [tool.basedpyright]
+typeCheckingMode = "standard"
 pythonVersion = "3.14"
 pythonPlatform = "Linux"
 include = ["src"]

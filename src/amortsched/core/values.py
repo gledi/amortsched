@@ -33,6 +33,14 @@ class EarlyPaymentFees:
     fixed: Amount = Decimal("0.00")
     percent: Amount = Decimal("0.00")
 
+    def __post_init__(self) -> None:
+        fixed = self.fixed if isinstance(self.fixed, Decimal) else Decimal(self.fixed)
+        percent = self.percent if isinstance(self.percent, Decimal) else Decimal(self.percent)
+        if fixed < Decimal("0.00"):
+            raise ValueError("Early payment fixed fee cannot be negative")
+        if percent < Decimal("0.00") or percent > Decimal("100.00"):
+            raise ValueError("Early payment percent fee must be between 0 and 100")
+
     def penalty(self, amount: Amount) -> Decimal:
         fixed = self.fixed if isinstance(self.fixed, Decimal) else Decimal(self.fixed)
         percent = self.percent if isinstance(self.percent, Decimal) else Decimal(self.percent)
@@ -44,7 +52,7 @@ class EarlyPaymentFees:
     def principal(self, amount: Amount) -> Decimal:
         amount = amount if isinstance(amount, Decimal) else Decimal(amount)
         penalty = self.penalty(amount)
-        return amount - penalty
+        return max(Decimal("0.00"), amount - penalty)
 
 
 class PaymentKind(enum.StrEnum):
@@ -100,6 +108,8 @@ class Term:
         if self.years < 0 or self.months < 0:
             raise InvalidTermError("Years and months must be non-negative", self)
         total_months = self.years * 12 + self.months
+        if total_months == 0:
+            raise InvalidTermError("Term must be at least one month", self)
         self.years = total_months // 12
         self.months = total_months % 12
 

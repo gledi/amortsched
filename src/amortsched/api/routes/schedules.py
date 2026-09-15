@@ -32,38 +32,39 @@ async def list_schedules(
     plan_id: uuid.UUID,
     user_id: CurrentUserId,
     handler: ListSchedules,
+    limit: int | None = None,
 ) -> list[ScheduleResponse]:
-    schedules = await handler.handle(ListSchedulesQuery(plan_id=plan_id, user_id=user_id))
+    schedules = await handler.handle(ListSchedulesQuery(plan_id=plan_id, user_id=user_id, limit=limit))
     return [ScheduleResponse.from_entity(s) for s in schedules]
 
 
 @router.get("/{schedule_id}", response_model=ScheduleResponse)
 async def get_schedule(
-    plan_id: uuid.UUID,  # pyright: ignore[reportUnusedParameter]
+    plan_id: uuid.UUID,
     schedule_id: uuid.UUID,
     user_id: CurrentUserId,
     handler: GetSchedule,
 ) -> ScheduleResponse:
-    schedule = await handler.handle(GetScheduleQuery(schedule_id=schedule_id, user_id=user_id))
+    schedule = await handler.handle(GetScheduleQuery(schedule_id=schedule_id, plan_id=plan_id, user_id=user_id))
     return ScheduleResponse.from_entity(schedule)
 
 
 @router.post("/{schedule_id}/save", response_model=ScheduleResponse)
 async def save_schedule(
     plan_id: uuid.UUID,
-    schedule_id: uuid.UUID,  # pyright: ignore[reportUnusedParameter]
+    schedule_id: uuid.UUID,
     user_id: CurrentUserId,
     handler: SaveSchedule,
 ) -> ScheduleResponse:
-    schedule = await handler.handle(SaveScheduleCommand(plan_id=plan_id, user_id=user_id))
+    schedule = await handler.handle(SaveScheduleCommand(plan_id=plan_id, schedule_id=schedule_id, user_id=user_id))
     return ScheduleResponse.from_entity(schedule)
 
 
 @router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_schedule(
-    plan_id: uuid.UUID,  # pyright: ignore[reportUnusedParameter]
+    plan_id: uuid.UUID,
     schedule_id: uuid.UUID,
     user_id: CurrentUserId,
     handler: DeleteSchedule,
 ) -> None:
-    await handler.handle(DeleteScheduleCommand(schedule_id=schedule_id, user_id=user_id))
+    await handler.handle(DeleteScheduleCommand(schedule_id=schedule_id, plan_id=plan_id, user_id=user_id))

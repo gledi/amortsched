@@ -18,13 +18,13 @@ repos:
       - id: check-merge-conflict
 
   - repo: https://github.com/DetachHead/basedpyright-prek-mirror
-    rev: 1.39.10
+    rev: 1.40.1
     hooks:
       - id: basedpyright
         files: ^src/
 
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.16.6
+    rev: v0.16.7
     hooks:
       - id: ruff-check
         args: ["--config=pyproject.toml"]

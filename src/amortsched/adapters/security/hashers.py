@@ -14,7 +14,12 @@ class PBKDF2PasswordHasher:
         return f"pbkdf2${salt}${hash_hex}"
 
     def verify(self, password: str, password_hash: str) -> bool:
-        _, salt, stored_hash = password_hash.split("$", 2)
+        try:
+            scheme, salt, stored_hash = password_hash.split("$", 2)
+        except ValueError:
+            return False
+        if scheme != "pbkdf2":
+            return False
         candidate = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), self._iterations).hex()
         return secrets.compare_digest(stored_hash, candidate)
 

@@ -330,10 +330,13 @@ class AsyncSqlAlchemyRefreshTokenRepository(BaseAsyncRepository[RefreshToken]):
         result = await self._session.execute(statement)
         return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
 
-    async def mark_used(self, token_id: UUID) -> None:
+    async def mark_used(self, token_id: UUID) -> bool:
         statement = (
             sqlalchemy.update(refresh_tokens)
             .where(refresh_tokens.c.id == token_id)
+            .where(refresh_tokens.c.used_at.is_(None))
+            .where(refresh_tokens.c.revoked_at.is_(None))
             .values(used_at=sqlalchemy.func.now())
         )
-        await self._session.execute(statement)  # pyright: ignore[reportUnusedCallResult]
+        result = await self._session.execute(statement)
+        return result.rowcount == 1  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]

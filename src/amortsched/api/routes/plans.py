@@ -64,8 +64,9 @@ async def create_plan(
 async def list_plans(
     user_id: CurrentUserId,
     handler: ListPlans,
+    limit: int | None = None,
 ) -> list[PlanResponse]:
-    plans = await handler.handle(ListPlansQuery(user_id=user_id))
+    plans = await handler.handle(ListPlansQuery(user_id=user_id, limit=limit))
     return [PlanResponse.from_entity(p) for p in plans]
 
 

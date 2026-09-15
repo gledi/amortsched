@@ -3,7 +3,7 @@ from types import TracebackType
 from typing import Protocol, Self
 
 from amortsched.core.entities import Plan, Profile, Schedule, User
-from amortsched.core.repositories import AsyncRepository
+from amortsched.core.repositories import AsyncRepository, RefreshTokenRepository
 
 
 class SecuritySettings(Protocol):
@@ -41,6 +41,7 @@ class AsyncUnitOfWork(Protocol):
     profiles: AsyncRepository[Profile]
     plans: AsyncRepository[Plan]
     schedules: AsyncRepository[Schedule]
+    refresh_tokens: RefreshTokenRepository
 
     async def begin(self) -> None: ...
     async def commit(self) -> None: ...

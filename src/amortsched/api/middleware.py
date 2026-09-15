@@ -15,7 +15,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        request_id = str(uuid.uuid4())
+        request_id = str(uuid.uuid7())
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(  # pyright: ignore[reportUnusedCallResult]
             request_id=request_id,

@@ -31,7 +31,7 @@ class RegisterUserHandler:
 
     async def handle(self, command: RegisterUserCommand) -> User:
         password_hash = await asyncio.to_thread(self._password_hasher.hash, command.password)
-        user = User(email=command.email, name=command.name, password_hash=password_hash)
+        user = User(email=command.email.casefold(), name=command.name, password_hash=password_hash)
         _ = await self._user_repo.add(user)
         return user
 
@@ -48,8 +48,8 @@ class AuthenticateUserHandler:
         self._password_hasher: PasswordHasher = password_hasher
 
     async def handle(self, command: AuthenticateUserCommand) -> User:
-        user = await self._user_repo.get_one_or_none(Eq("email", command.email))
-        if user is None:
+        user = await self._user_repo.get_one_or_none(Eq("email", command.email.casefold()))
+        if user is None or not user.is_active:
             raise AuthenticationError()
         if not await asyncio.to_thread(self._password_hasher.verify, command.password, user.password_hash):
             raise AuthenticationError()
@@ -125,11 +125,9 @@ class RefreshTokensHandler:
         if existing is None or existing.expires_at < now() or existing.revoked_at is not None:
             raise RefreshTokenNotFoundError()
 
-        if existing.used_at is not None:
+        if existing.used_at is not None or not await self._refresh_token_repo.mark_used(existing.id):
             _ = await self._refresh_token_repo.revoke_family(existing.family_id)
             raise RefreshTokenReplayError()
-
-        await self._refresh_token_repo.mark_used(existing.id)
 
         raw_token = self._token_service.create_refresh_token()
         new_token = RefreshToken(
@@ -186,7 +184,7 @@ class CreateRefreshTokenHandler:
         token = RefreshToken(
             user_id=command.user_id,
             token_hash=self._token_service.hash_refresh_token(raw_token),
-            family_id=uuid.uuid4(),
+            family_id=uuid.uuid7(),
             expires_at=now() + datetime.timedelta(days=self._settings.security.refresh_token_expiration_days),
         )
         _ = await self._refresh_token_repo.add(token)

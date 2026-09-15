@@ -1,6 +1,7 @@
 const REFRESH_TOKEN_KEY = "refresh_token";
 
 let accessToken: string | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
 export function getAccessToken(): string | null {
   return accessToken;
@@ -20,7 +21,7 @@ export function clearTokens(): void {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
-export async function silentRefresh(): Promise<boolean> {
+async function performRefresh(): Promise<boolean> {
   const refresh = getRefreshToken();
   if (!refresh) return false;
 
@@ -43,4 +44,13 @@ export async function silentRefresh(): Promise<boolean> {
     clearTokens();
     return false;
   }
+}
+
+export function silentRefresh(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = performRefresh().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
 }

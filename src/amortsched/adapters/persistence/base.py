@@ -33,6 +33,12 @@ class BaseRepository[T: Entity]:
     _relationships: ClassVar[dict[str, Relationship]]
 
     @classmethod
+    def _visible_clause(cls):
+        if "is_deleted" in cls._table.c:
+            return cls._table.c.is_deleted.is_(False)
+        return sqlalchemy.true()
+
+    @classmethod
     def _plan_requested_relations(
         cls, specification: Specification[T] | None
     ) -> tuple[Specification[T] | None, RelationshipPlan]:
@@ -40,11 +46,32 @@ class BaseRepository[T: Entity]:
         return filter_spec, plan_relations(cls._relationships, relations)
 
     @classmethod
-    def _build_get_items_statement(cls, filter_spec: Specification[T] | None, limit: int | None = None):
+    def _resolve_order_by(cls, order_by: str | Sequence[str] | None) -> list[Any]:  # pyright: ignore[reportExplicitAny]
+        if order_by is None:
+            return [cls._table.c[cls._order_column]]
+        cols = [order_by] if isinstance(order_by, str) else list(order_by)
+        result: list[Any] = []  # pyright: ignore[reportExplicitAny]
+        for col_name in cols:
+            descending = col_name.startswith("-")
+            clean_name = col_name.lstrip("+-")
+            if clean_name not in cls._table.c:
+                raise ValueError(f"Unknown order_by column '{clean_name}' for table '{cls._table.name}'")
+            col = cls._table.c[clean_name]
+            result.append(col.desc() if descending else col.asc())
+        return result
+
+    @classmethod
+    def _build_get_items_statement(
+        cls,
+        filter_spec: Specification[T] | None,
+        order_by: str | Sequence[str] | None = None,
+        limit: int | None = None,
+    ):
+        order_cols = cls._resolve_order_by(order_by)
         statement = (
             sqlalchemy.select(cls._table)
-            .where(compile_specification(cls._table, filter_spec))
-            .order_by(cls._table.c[cls._order_column])
+            .where(cls._visible_clause(), compile_specification(cls._table, filter_spec))
+            .order_by(*order_cols)
         )
         if limit is not None:
             statement = statement.limit(limit)
@@ -55,13 +82,15 @@ class BaseRepository[T: Entity]:
         return (
             sqlalchemy.select(sqlalchemy.func.count())
             .select_from(cls._table)
-            .where(compile_specification(cls._table, filter_spec))
+            .where(cls._visible_clause(), compile_specification(cls._table, filter_spec))
         )
 
     @classmethod
     def _build_exists_statement(cls, filter_spec: Specification[T] | None):
         return sqlalchemy.select(
-            sqlalchemy.exists().where(compile_specification(cls._table, filter_spec)).select_from(cls._table)
+            sqlalchemy.exists()
+            .where(cls._visible_clause(), compile_specification(cls._table, filter_spec))
+            .select_from(cls._table)
         )
 
     @classmethod
@@ -71,7 +100,7 @@ class BaseRepository[T: Entity]:
         pagination: Pagination | None = None,
     ):
         filter_spec, relation_plan = cls._plan_requested_relations(specification)
-        where_clause = compile_specification(cls._table, filter_spec)
+        where_clause = sqlalchemy.and_(cls._visible_clause(), compile_specification(cls._table, filter_spec))
         statement, limit, offset = build_single_statement_paginated_query(
             cls._table,
             where_clause,
@@ -82,12 +111,24 @@ class BaseRepository[T: Entity]:
 
     @classmethod
     def _build_delete_statement(cls, filter_spec: Specification[T] | None):
+        where_clause = sqlalchemy.and_(cls._visible_clause(), compile_specification(cls._table, filter_spec))
+        if "is_deleted" in cls._table.c:
+            return sqlalchemy.update(cls._table).where(where_clause).values(is_deleted=True)
+        return sqlalchemy.delete(cls._table).where(where_clause)
+
+    @classmethod
+    def _build_purge_statement(cls, filter_spec: Specification[T] | None):
         return sqlalchemy.delete(cls._table).where(compile_specification(cls._table, filter_spec))
 
     @classmethod
     def _ensure_order_by_supported(cls, order_by: str | Sequence[str] | None) -> None:
-        if order_by is not None:
-            raise NotImplementedError(f"order_by is not supported by {cls.__name__}")
+        if order_by is None:
+            return
+        cols = [order_by] if isinstance(order_by, str) else list(order_by)
+        for col_name in cols:
+            clean_name = col_name.lstrip("+-")
+            if clean_name not in cls._table.c:
+                raise ValueError(f"Unknown order_by column '{clean_name}' for table '{cls._table.name}'")
 
 
 class AsyncRepository[T: Entity](BaseRepository[T]):
@@ -120,7 +161,7 @@ class AsyncRepository[T: Entity](BaseRepository[T]):
     ) -> AsyncIterator[T]:
         self._ensure_order_by_supported(order_by)
         filter_spec, relation_plan = self._plan_requested_relations(specification)
-        statement = self._build_get_items_statement(filter_spec, limit)
+        statement = self._build_get_items_statement(filter_spec, order_by=order_by, limit=limit)
 
         rows = cast(Sequence[Mapping[str, object]], (await self._session.execute(statement)).mappings().all())
         items = [self._from_row(row) for row in rows]
@@ -183,6 +224,6 @@ class AsyncRepository[T: Entity](BaseRepository[T]):
     async def purge(self, specification: Specification[T]) -> int:
         ensure_no_relations(specification, "purge")
         filter_spec, _relations = extract_relations(specification)
-        statement = self._build_delete_statement(filter_spec)
+        statement = self._build_purge_statement(filter_spec)
         result = await self._session.execute(statement)
         return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]

@@ -1,10 +1,13 @@
-from typing import Any, Callable, Self, override
+from collections.abc import Callable
+from types import TracebackType
+from typing import Self, override
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from amortsched.adapters.persistence.repositories import (
     AsyncSqlAlchemyPlanRepository,
     AsyncSqlAlchemyProfileRepository,
+    AsyncSqlAlchemyRefreshTokenRepository,
     AsyncSqlAlchemyScheduleRepository,
     AsyncSqlAlchemyUserRepository,
 )
@@ -12,19 +15,20 @@ from amortsched.app.ports import AsyncUnitOfWork
 
 
 class AsyncSqlAlchemyUnitOfWork(AsyncUnitOfWork):
-    def __init__(self, session_factory: Callable[[], AsyncSession]):
-        self._session_factory = session_factory  # pyright: ignore[reportUnannotatedClassAttribute]
+    def __init__(self, session_factory: Callable[[], AsyncSession]) -> None:
+        self._session_factory: Callable[[], AsyncSession] = session_factory
         self._session: AsyncSession | None = None
-        self._committed = False  # pyright: ignore[reportUnannotatedClassAttribute]
+        self._committed: bool = False
 
     @override
     async def begin(self) -> None:
         self._session = self._session_factory()
         self._committed = False
-        self.users = AsyncSqlAlchemyUserRepository(self._session)  # pyright: ignore[reportUnannotatedClassAttribute]
-        self.profiles = AsyncSqlAlchemyProfileRepository(self._session)  # pyright: ignore[reportUnannotatedClassAttribute]
-        self.plans = AsyncSqlAlchemyPlanRepository(self._session)  # pyright: ignore[reportUnannotatedClassAttribute]
-        self.schedules = AsyncSqlAlchemyScheduleRepository(self._session)  # pyright: ignore[reportUnannotatedClassAttribute]
+        self.users = AsyncSqlAlchemyUserRepository(self._session)
+        self.profiles = AsyncSqlAlchemyProfileRepository(self._session)
+        self.plans = AsyncSqlAlchemyPlanRepository(self._session)
+        self.schedules = AsyncSqlAlchemyScheduleRepository(self._session)
+        self.refresh_tokens = AsyncSqlAlchemyRefreshTokenRepository(self._session)
 
     @override
     async def commit(self) -> None:
@@ -52,9 +56,13 @@ class AsyncSqlAlchemyUnitOfWork(AsyncUnitOfWork):
         return self
 
     @override
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:  # pyright: ignore[reportAny, reportExplicitAny]
-        if exc_type is not None:
-            await self.rollback()
-        elif not self._committed:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
+        if exc_type is not None or not self._committed:
             await self.rollback()
         await self.close()
+        return None

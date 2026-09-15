@@ -50,6 +50,8 @@ class PaginatedMeta[T]:
 
     @property
     def page(self) -> int:
+        if self.limit <= 0:
+            return 1
         return self.offset // self.limit + 1
 
     @property

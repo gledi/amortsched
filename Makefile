@@ -12,6 +12,10 @@ PY := $(VENV_DIR)/bin/python
 
 ARGS = $(filter-out $@,$(MAKECMDGOALS))
 
+COMPOSE := docker compose
+COMPOSE_APP := $(COMPOSE) --profile app
+COMPOSE_ALL := $(COMPOSE) --profile '*'
+
 
 .PHONY: help print-% print/all versions
 .SILENT: help print-% print/all versions
@@ -159,52 +163,52 @@ run/api: ## Start the API dev server (uvicorn, autoreload)
 
 ##@ Compose
 up: ## Start infra services (db, cache) [service...]
-	docker compose up -d --wait $(ARGS)
+	$(COMPOSE) up -d --wait $(ARGS)
 
 up/app: ## Start full app stack (app profile) [service...]
-	docker compose --profile app up -d --wait $(ARGS)
+	$(COMPOSE_APP) up -d --wait $(ARGS)
 
 up/debug up/app/debug: ## Start app stack with debugpy on :5678 [service...]
-	docker compose --profile app -f compose.yml -f compose.debug.yml up -d --wait $(ARGS)
+	$(COMPOSE_APP) -f compose.yml -f compose.debug.yml up -d --wait $(ARGS)
 
 build: ## Build service images [service...]
-	docker compose build $(ARGS)
+	$(COMPOSE_ALL) build $(ARGS)
 
 up/build: ## Start services with build [service...]
-	docker compose up -d --wait --build $(ARGS)
+	$(COMPOSE_APP) up -d --wait --build $(ARGS)
 
 up/attach: ## Start services in foreground (attached)
-	docker compose up
+	$(COMPOSE_APP) up
 
 down: ## Stop and remove services
-	docker compose down --remove-orphans
+	$(COMPOSE_ALL) down --remove-orphans
 
 destroy: ## Stop, remove services AND volumes
-	docker compose down --volumes --remove-orphans
+	$(COMPOSE_ALL) down --volumes --remove-orphans
 
 ps: ## List running services
-	docker compose ps
+	$(COMPOSE_ALL) ps
 
 top: ## Show running processes per service
-	docker compose top
+	$(COMPOSE_ALL) top
 
 stats: ## Show live resource usage stats
-	docker stats
+	$(COMPOSE_ALL) stats
 
 start: ## Start stopped services [service...]
-	docker compose start $(ARGS)
+	$(COMPOSE_ALL) start $(ARGS)
 
 stop: ## Stop services [service...]
-	docker compose stop $(ARGS)
+	$(COMPOSE_ALL) stop $(ARGS)
 
 restart: ## Restart services [service...]
-	docker compose restart $(ARGS)
+	$(COMPOSE_ALL) restart $(ARGS)
 
 logs: ## Follow service logs [service]
-	docker compose logs -f $(ARGS)
+	$(COMPOSE_ALL) logs -f $(ARGS)
 
-sh: ## Open a shell in a service [service]
-	docker compose exec $(ARGS) sh
+sh: ## Open a shell in a service <service>
+	$(COMPOSE) exec $(ARGS) sh
 
 
 .PHONY: image/api/dev image/api/prod image/ui/dev image/ui/prod

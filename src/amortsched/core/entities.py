@@ -45,7 +45,6 @@ class Schedule:
     generated_at: datetime.datetime = field(default_factory=now)
     is_deleted: bool = False
 
-    _revision: int = field(default=0, init=False, repr=False)
     _plan: Plan | None = field(default=None, init=False, repr=False)
 
     @property
@@ -100,7 +99,6 @@ class Plan:
     created_at: datetime.datetime = field(default_factory=now)
     updated_at: datetime.datetime = field(default_factory=now)
 
-    _revision: int = field(default=0, init=False, repr=False)
     _user: User | None = field(default=None, init=False, repr=False)
     _schedules: list[Schedule] = field(default_factory=list, init=False, repr=False)
 
@@ -175,7 +173,6 @@ class Profile:
     created_at: datetime.datetime = field(default_factory=now)
     updated_at: datetime.datetime = field(default_factory=now)
 
-    _revision: int = field(default=0, init=False, repr=False)
     _user: User | None = field(default=None, init=False, repr=False)
 
     @property
@@ -206,7 +203,6 @@ class User:
     created_at: datetime.datetime = field(default_factory=now)
     updated_at: datetime.datetime = field(default_factory=now)
 
-    _revision: int = field(default=0, init=False, repr=False)
     _plans: list[Plan] = field(default_factory=list, init=False, repr=False)
     _profile: Profile | None = field(default=None, init=False, repr=False)
 

@@ -20,6 +20,7 @@ from amortsched.core.specifications import (
     IsDeleted,
     IsFalse,
     IsNone,
+    IsNotDeleted,
     IsTrue,
     Le,
     Like,
@@ -121,6 +122,11 @@ def _(spec: IsFalse, table: Table) -> ColumnElement[bool]:  # pyright: ignore[re
 @_compile_specification.register
 def _(spec: IsDeleted, table: Table) -> ColumnElement[bool]:  # pyright: ignore[reportMissingTypeArgument, reportUnknownParameterType, reportUnusedParameter]
     return _get_column(table, "is_deleted").is_(True)
+
+
+@_compile_specification.register
+def _(spec: IsNotDeleted, table: Table) -> ColumnElement[bool]:  # pyright: ignore[reportMissingTypeArgument, reportUnknownParameterType, reportUnusedParameter]
+    return _get_column(table, "is_deleted").is_(False)
 
 
 @_compile_specification.register

@@ -212,6 +212,15 @@ class IsDeleted[T](Specification[T]):
 
 @dataclass(frozen=True, slots=True)
 class IsActive[T](Specification[T]):
+    field: str = "is_active"
+
+    @override
+    def is_satisfied_by(self, candidate: T) -> bool:
+        return getattr(candidate, self.field) is True
+
+
+@dataclass(frozen=True, slots=True)
+class IsNotDeleted[T](Specification[T]):
     field: str = "is_deleted"
 
     @override

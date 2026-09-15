@@ -55,3 +55,22 @@ async def test_delete_plan(client, auth_headers):
     plan_id = create_resp.json()["id"]
     resp = await client.delete(f"/api/plans/{plan_id}", headers=auth_headers)
     assert resp.status_code == 204
+    resp = await client.get(f"/api/plans/{plan_id}", headers=auth_headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_rejects_empty_term_and_accepts_zero_interest(client, auth_headers):
+    invalid = await client.post(
+        "/api/plans",
+        json={"name": "Invalid", "amount": "1000", "interest_rate": "0", "term": {}},
+        headers=auth_headers,
+    )
+    assert invalid.status_code == 422
+
+    valid = await client.post(
+        "/api/plans",
+        json={"name": "Zero interest", "amount": "1000", "interest_rate": "0", "term": {"years": 1}},
+        headers=auth_headers,
+    )
+    assert valid.status_code == 201

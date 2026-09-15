@@ -2,20 +2,26 @@ import datetime
 import uuid
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from amortsched.core.entities import Plan
 from amortsched.core.values import InterestRateApplication
 
 
 class TermSchema(BaseModel):
-    years: int = 0
-    months: int = 0
+    years: int = Field(default=0, ge=0, le=50)
+    months: int = Field(default=0, ge=0, le=11)
+
+    @model_validator(mode="after")
+    def validate_nonzero(self) -> "TermSchema":
+        if self.years == 0 and self.months == 0:
+            raise ValueError("Term must be at least one month")
+        return self
 
 
 class EarlyPaymentFeesSchema(BaseModel):
-    fixed: Decimal = Decimal("0.00")
-    percent: Decimal = Decimal("0.00")
+    fixed: Decimal = Field(default=Decimal("0.00"), ge=0)
+    percent: Decimal = Field(default=Decimal("0.00"), ge=0, le=100)
 
 
 class ExtraPaymentSchema(BaseModel):
@@ -35,9 +41,11 @@ class InterestRateChangeSchema(BaseModel):
 
 
 class CreatePlanRequest(BaseModel):
-    name: str
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=200)
     amount: Decimal = Field(gt=0)
-    interest_rate: Decimal = Field(gt=0, le=100)
+    interest_rate: Decimal = Field(ge=0, le=100)
     term: TermSchema
     start_date: datetime.date | None = None
     early_payment_fees: EarlyPaymentFeesSchema = Field(default_factory=EarlyPaymentFeesSchema)
@@ -45,9 +53,11 @@ class CreatePlanRequest(BaseModel):
 
 
 class UpdatePlanRequest(BaseModel):
-    name: str | None = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
     amount: Decimal | None = Field(default=None, gt=0)
-    interest_rate: Decimal | None = Field(default=None, gt=0, le=100)
+    interest_rate: Decimal | None = Field(default=None, ge=0, le=100)
     term: TermSchema | None = None
     start_date: datetime.date | None = None
     early_payment_fees: EarlyPaymentFeesSchema | None = None
@@ -62,7 +72,7 @@ class AddExtraPaymentRequest(BaseModel):
 class AddRecurringExtraPaymentRequest(BaseModel):
     start_date: datetime.date
     amount: Decimal = Field(gt=0)
-    count: int = Field(gt=0)
+    count: int = Field(gt=0, le=600)
 
 
 class AddInterestRateChangeRequest(BaseModel):

@@ -18,7 +18,7 @@ target_metadata = metadata
 
 
 def get_url() -> str:
-    url = os.environ["DATABASE_URL"]
+    url = os.environ.get("DATABASE_URL") or os.environ["DATABASE__DSN"]
     return url.replace("+psycopg://", "+psycopg_async://")
 
 

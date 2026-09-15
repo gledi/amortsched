@@ -3,8 +3,8 @@ import uuid
 from dataclasses import dataclass
 from decimal import Decimal
 
+from amortsched.app.access import get_owned_plan, get_owned_schedule
 from amortsched.core.entities import Plan, Schedule
-from amortsched.core.errors import PlanNotFoundError, PlanOwnershipError, ScheduleNotFoundError
 from amortsched.core.repositories import AsyncRepository
 from amortsched.core.specifications import Id
 from amortsched.core.values import (
@@ -19,41 +19,8 @@ from amortsched.core.values import (
     TermType,
 )
 
-
-async def _get_owned_plan(plan_repo: AsyncRepository[Plan], plan_id: uuid.UUID, user_id: uuid.UUID) -> Plan:
-    """Fetch a plan and verify ownership.
-
-    Raises:
-        PlanNotFoundError: If the plan does not exist.
-        PlanOwnershipError: If the plan belongs to a different user.
-    """
-    plan = await plan_repo.get_by_id(plan_id)
-    if plan is None:
-        raise PlanNotFoundError(plan_id)
-    if plan.user_id != user_id:
-        raise PlanOwnershipError(plan_id, user_id)
-    return plan
-
-
-async def _get_owned_schedule(
-    schedule_repo: AsyncRepository[Schedule],
-    plan_repo: AsyncRepository[Plan],
-    schedule_id: uuid.UUID,
-    user_id: uuid.UUID,
-) -> Schedule:
-    """Fetch a schedule and verify ownership transitively through its plan.
-
-    Raises:
-        ScheduleNotFoundError: If the schedule does not exist.
-        PlanNotFoundError: If the associated plan does not exist.
-        PlanOwnershipError: If the plan belongs to a different user.
-    """
-    schedule = await schedule_repo.get_by_id(schedule_id)
-    if schedule is None:
-        raise ScheduleNotFoundError(schedule_id)
-    plan = await _get_owned_plan(plan_repo, schedule.plan_id, user_id)
-    schedule.plan = plan
-    return schedule
+_get_owned_plan = get_owned_plan
+_get_owned_schedule = get_owned_schedule
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,6 +217,7 @@ class AddInterestRateChangeHandler:
 @dataclass(frozen=True, slots=True)
 class SaveScheduleCommand:
     plan_id: uuid.UUID
+    schedule_id: uuid.UUID
     user_id: uuid.UUID
 
 
@@ -259,15 +227,19 @@ class SaveScheduleHandler:
         self._schedule_repo: AsyncRepository[Schedule] = schedule_repo
 
     async def handle(self, command: SaveScheduleCommand) -> Schedule:
-        plan = await _get_owned_plan(self._plan_repo, command.plan_id, command.user_id)
-        schedule = plan.generate()
-        _ = await self._schedule_repo.add(schedule)
-        return schedule
+        return await _get_owned_schedule(
+            self._schedule_repo,
+            self._plan_repo,
+            command.schedule_id,
+            command.plan_id,
+            command.user_id,
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class DeleteScheduleCommand:
     schedule_id: uuid.UUID
+    plan_id: uuid.UUID
     user_id: uuid.UUID
 
 
@@ -277,5 +249,7 @@ class DeleteScheduleHandler:
         self._plan_repo: AsyncRepository[Plan] = plan_repo
 
     async def handle(self, command: DeleteScheduleCommand) -> None:
-        _ = await _get_owned_schedule(self._schedule_repo, self._plan_repo, command.schedule_id, command.user_id)
+        _ = await _get_owned_schedule(
+            self._schedule_repo, self._plan_repo, command.schedule_id, command.plan_id, command.user_id
+        )
         _ = await self._schedule_repo.delete(Id(command.schedule_id))

@@ -44,7 +44,7 @@ async def test_duplicate_email(client, register_user):
     await register_user(client, "dup@example.com")
     resp = await client.post(
         "/api/auth/register",
-        json={"email": "dup@example.com", "name": "Another", "password": "pass123"},
+        json={"email": "dup@example.com", "name": "Another", "password": "pass1234"},
     )
     assert resp.status_code == 409
 
@@ -121,3 +121,12 @@ async def test_logout(client, register_user):
 async def test_refresh_with_invalid_token(client):
     resp = await client.post("/api/auth/refresh", json={"refresh_token": "invalid-token"})
     assert resp.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_registration_validates_identity_fields(client):
+    resp = await client.post(
+        "/api/auth/register",
+        json={"email": "not-an-email", "name": "", "password": "short"},
+    )
+    assert resp.status_code == 422
