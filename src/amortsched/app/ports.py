@@ -1,9 +1,10 @@
 import uuid
+from dataclasses import dataclass
 from types import TracebackType
 from typing import Protocol, Self
 
 from amortsched.core.entities import Plan, Profile, Schedule, User
-from amortsched.core.repositories import AsyncRepository, RefreshTokenRepository
+from amortsched.core.repositories import AccountTokenRepository, AsyncRepository, RefreshTokenRepository
 
 
 class SecuritySettings(Protocol):
@@ -22,6 +23,8 @@ class DatabaseSettings(Protocol):
 
 class Settings(Protocol):
     @property
+    def public_url(self) -> str: ...
+    @property
     def security(self) -> SecuritySettings: ...
     @property
     def database(self) -> DatabaseSettings: ...
@@ -36,12 +39,31 @@ class TokenService(Protocol):
     def hash_refresh_token(self, token: str) -> str: ...
 
 
+@dataclass(frozen=True, slots=True)
+class EmailMessage:
+    to: str
+    subject: str
+    text: str
+    html: str | None = None
+
+
+class EmailSender(Protocol):
+    async def send(self, message: EmailMessage) -> None: ...
+
+
+class RateLimiter(Protocol):
+    async def hit(self, key: str, limit: int, window_seconds: int) -> int | None:
+        """Record one attempt; return seconds until retry when over the limit, else None."""
+        ...
+
+
 class AsyncUnitOfWork(Protocol):
     users: AsyncRepository[User]
     profiles: AsyncRepository[Profile]
     plans: AsyncRepository[Plan]
     schedules: AsyncRepository[Schedule]
     refresh_tokens: RefreshTokenRepository
+    account_tokens: AccountTokenRepository
 
     async def begin(self) -> None: ...
     async def commit(self) -> None: ...

@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from amortsched.adapters.persistence.base import AsyncRepository as BaseAsyncRepository
 from amortsched.adapters.persistence.helpers import build_postgres_upsert_statement
 from amortsched.adapters.persistence.mappers import (
+    account_token_from_row,
+    account_token_to_values,
     plan_from_row,
     plan_to_values,
     profile_from_row,
@@ -21,10 +23,11 @@ from amortsched.adapters.persistence.mappers import (
 )
 from amortsched.adapters.persistence.relationships import PlannedRelation, Relationship
 from amortsched.adapters.persistence.specifications import compile_specification
-from amortsched.adapters.persistence.tables import plans, profiles, refresh_tokens, schedules, users
-from amortsched.core.entities import Plan, Profile, RefreshToken, Schedule, User
+from amortsched.adapters.persistence.tables import account_tokens, plans, profiles, refresh_tokens, schedules, users
+from amortsched.core.entities import AccountToken, Plan, Profile, RefreshToken, Schedule, User
 from amortsched.core.errors import (
     DuplicateEmailError,
+    InvalidAccountTokenError,
     PlanNotFoundError,
     ProfileNotFoundError,
     RefreshTokenNotFoundError,
@@ -340,3 +343,50 @@ class AsyncSqlAlchemyRefreshTokenRepository(BaseAsyncRepository[RefreshToken]):
         )
         result = await self._session.execute(statement)
         return result.rowcount == 1  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+
+    async def revoke_all_for_user(self, user_id: UUID) -> int:
+        statement = (
+            sqlalchemy.update(refresh_tokens)
+            .where(refresh_tokens.c.user_id == user_id)
+            .where(refresh_tokens.c.revoked_at.is_(None))
+            .values(revoked_at=sqlalchemy.func.now())
+        )
+        result = await self._session.execute(statement)
+        return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
+
+
+@final
+class AsyncSqlAlchemyAccountTokenRepository(BaseAsyncRepository[AccountToken]):
+    _table = account_tokens
+    _from_row = staticmethod(account_token_from_row)
+    _to_values = staticmethod(account_token_to_values)
+    _not_found_error = InvalidAccountTokenError
+    _relationships: dict[str, Relationship] = {}  # pyright: ignore[reportIncompatibleVariableOverride]
+
+    async def get_by_token_hash(self, token_hash: str) -> AccountToken | None:
+        statement = sqlalchemy.select(account_tokens).where(account_tokens.c.token_hash == token_hash)
+        row = cast(Mapping[str, object] | None, (await self._session.execute(statement)).mappings().first())
+        if row is None:
+            return None
+        return account_token_from_row(row)
+
+    async def mark_used(self, token_id: UUID) -> bool:
+        statement = (
+            sqlalchemy.update(account_tokens)
+            .where(account_tokens.c.id == token_id)
+            .where(account_tokens.c.used_at.is_(None))
+            .values(used_at=sqlalchemy.func.now())
+        )
+        result = await self._session.execute(statement)
+        return result.rowcount == 1  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+
+    async def invalidate_unused(self, user_id: UUID, purpose: str) -> int:
+        statement = (
+            sqlalchemy.update(account_tokens)
+            .where(account_tokens.c.user_id == user_id)
+            .where(account_tokens.c.purpose == purpose)
+            .where(account_tokens.c.used_at.is_(None))
+            .values(used_at=sqlalchemy.func.now())
+        )
+        result = await self._session.execute(statement)
+        return result.rowcount  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]

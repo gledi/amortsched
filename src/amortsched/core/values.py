@@ -1,9 +1,10 @@
 import datetime
 import enum
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 
-from amortsched.core.errors import InvalidTermError
+from amortsched.core.errors import InvalidTermError, ValidationError
 
 type Amount = int | float | Decimal
 type TermType = int | tuple[int, int] | Term
@@ -11,6 +12,16 @@ type InterestRate = float | Decimal
 
 
 DAYS_IN_YEAR = Decimal("365")
+DEFAULT_CURRENCY = "USD"
+
+_CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")
+
+
+def normalize_currency(code: str, field: str = "currency") -> str:
+    normalized = code.strip().upper()
+    if not _CURRENCY_CODE.fullmatch(normalized):
+        raise ValidationError([{"field": field, "message": "Currency must be a three-letter ISO 4217 code"}])
+    return normalized
 
 
 class Month(enum.IntEnum):
@@ -55,6 +66,95 @@ class EarlyPaymentFees:
         return max(Decimal("0.00"), amount - penalty)
 
 
+class LoanType(enum.StrEnum):
+    Mortgage = "mortgage"
+    Auto = "auto"
+    Personal = "personal"
+    Student = "student"
+    Other = "other"
+
+
+@dataclass(frozen=True, slots=True)
+class HousingPayment:
+    property_tax: Decimal
+    insurance: Decimal
+    hoa: Decimal
+    pmi: Decimal
+
+    @property
+    def escrow(self) -> Decimal:
+        return self.property_tax + self.insurance + self.hoa
+
+    @property
+    def total(self) -> Decimal:
+        return self.escrow + self.pmi
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class HousingCosts:
+    """Ownership costs paid alongside a mortgage. Only PMI is a cost of the loan itself."""
+
+    property_value: Decimal | None = None
+    property_tax_annual: Decimal = Decimal("0.00")
+    insurance_annual: Decimal = Decimal("0.00")
+    hoa_monthly: Decimal = Decimal("0.00")
+    pmi_annual_rate: Decimal = Decimal("0.00")
+    pmi_cancel_ltv: Decimal = Decimal("78")
+
+    def __post_init__(self) -> None:
+        errors: list[dict[str, str]] = []
+        if self.property_value is not None and self.property_value <= 0:
+            errors.append({"field": "housing_costs.property_value", "message": "Property value must be positive"})
+        for name in ("property_tax_annual", "insurance_annual", "hoa_monthly", "pmi_annual_rate"):
+            if getattr(self, name) < 0:
+                errors.append({"field": f"housing_costs.{name}", "message": "Must be zero or greater"})
+        if self.pmi_annual_rate > 100:
+            errors.append({"field": "housing_costs.pmi_annual_rate", "message": "PMI rate must be at most 100%"})
+        if not Decimal("0") < self.pmi_cancel_ltv <= Decimal("100"):
+            errors.append({"field": "housing_costs.pmi_cancel_ltv", "message": "PMI cancellation LTV must be 0-100%"})
+        if self.pmi_annual_rate > 0 and self.property_value is None:
+            errors.append({"field": "housing_costs.property_value", "message": "PMI requires a property value"})
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def is_empty(self) -> bool:
+        return (
+            self.property_value is None
+            and self.property_tax_annual == 0
+            and self.insurance_annual == 0
+            and self.hoa_monthly == 0
+            and self.pmi_annual_rate == 0
+        )
+
+    @property
+    def has_pmi(self) -> bool:
+        return self.pmi_annual_rate > 0 and self.property_value is not None
+
+    def ltv_percent(self, balance: Decimal) -> Decimal | None:
+        if self.property_value is None:
+            return None
+        return balance / self.property_value * Decimal("100")
+
+    def pmi_applies(self, balance: Decimal) -> bool:
+        ltv = self.ltv_percent(balance)
+        return self.has_pmi and ltv is not None and ltv > self.pmi_cancel_ltv
+
+    def down_payment(self, loan_amount: Decimal) -> Decimal | None:
+        if self.property_value is None:
+            return None
+        return max(Decimal("0.00"), self.property_value - loan_amount)
+
+    def monthly_payment(self, *, loan_amount: Decimal, pmi_active: bool) -> HousingPayment:
+        pmi = loan_amount * self.pmi_annual_rate / Decimal("100") / Decimal("12") if pmi_active else Decimal("0.00")
+        return HousingPayment(
+            property_tax=self.property_tax_annual / Decimal("12"),
+            insurance=self.insurance_annual / Decimal("12"),
+            hoa=self.hoa_monthly,
+            pmi=pmi,
+        )
+
+
 class PaymentKind(enum.StrEnum):
     ScheduledPayment = "scheduled"
     OneTimeExtraPayment = "one_time_extra"
@@ -93,6 +193,8 @@ class ScheduleTotals:
     fees: Decimal
     months: int
     paid_off: bool
+    pmi: Decimal = Decimal("0.00")
+    escrow: Decimal = Decimal("0.00")
 
     @property
     def total_outflow(self) -> Decimal:
@@ -131,6 +233,7 @@ class Installment:
     month: Month
     payment: Payment
     balance: Balance
+    housing: HousingPayment | None = None
 
     @property
     def month_name(self) -> str:

@@ -11,6 +11,7 @@ users = sqlalchemy.Table(
     Column("email", sqlalchemy.String, nullable=False),
     Column("name", sqlalchemy.String, nullable=False),
     Column("is_active", sqlalchemy.Boolean, nullable=False),
+    Column("email_verified_at", sqlalchemy.DateTime(timezone=True), nullable=True),
     Column("password_hash", sqlalchemy.String, nullable=False),
     Column("created_at", sqlalchemy.DateTime(timezone=True), nullable=False),
     Column("updated_at", sqlalchemy.DateTime(timezone=True), nullable=False),
@@ -26,6 +27,7 @@ profiles = sqlalchemy.Table(
     Column("phone", sqlalchemy.String, nullable=True),
     Column("locale", sqlalchemy.String, nullable=True),
     Column("timezone", sqlalchemy.String, nullable=True),
+    Column("currency", sqlalchemy.String(3), nullable=True),
     Column("created_at", sqlalchemy.DateTime(timezone=True), nullable=False),
     Column("updated_at", sqlalchemy.DateTime(timezone=True), nullable=False),
     sqlalchemy.UniqueConstraint("user_id", name="uq_profiles_user_id"),
@@ -43,6 +45,8 @@ plans = sqlalchemy.Table(
     Column("term_months", sqlalchemy.Integer, nullable=False),
     Column("interest_rate", sqlalchemy.Numeric(precision=9, scale=6), nullable=False),
     Column("start_date", sqlalchemy.Date, nullable=False),
+    Column("loan_type", sqlalchemy.String(32), nullable=False, server_default=sqlalchemy.text("'other'")),
+    Column("currency", sqlalchemy.String(3), nullable=False, server_default=sqlalchemy.text("'USD'")),
     Column("lender", sqlalchemy.String(200), nullable=True),
     Column(
         "upfront_fees",
@@ -51,6 +55,7 @@ plans = sqlalchemy.Table(
         server_default=sqlalchemy.text("0.00"),
     ),
     Column("early_payment_fees", JSONB, nullable=False),
+    Column("housing_costs", JSONB, nullable=False, server_default=sqlalchemy.text("'{}'::jsonb")),
     Column("interest_rate_application", sqlalchemy.String, nullable=False),
     Column("status", sqlalchemy.String, nullable=False),
     Column("one_time_extra_payments", JSONB, nullable=False),
@@ -97,4 +102,22 @@ refresh_tokens = sqlalchemy.Table(
     Column("used_at", sqlalchemy.DateTime(timezone=True), nullable=True),
     Column("revoked_at", sqlalchemy.DateTime(timezone=True), nullable=True),
     Column("created_at", sqlalchemy.DateTime(timezone=True), nullable=False, server_default=sqlalchemy.func.now()),
+)
+
+account_tokens = sqlalchemy.Table(
+    "account_tokens",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column(
+        "user_id",
+        UUID(as_uuid=True),
+        sqlalchemy.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("purpose", sqlalchemy.String(32), nullable=False),
+    Column("token_hash", sqlalchemy.String(128), nullable=False, unique=True, index=True),
+    Column("expires_at", sqlalchemy.DateTime(timezone=True), nullable=False),
+    Column("used_at", sqlalchemy.DateTime(timezone=True), nullable=True),
+    Column("created_at", sqlalchemy.DateTime(timezone=True), nullable=False),
 )

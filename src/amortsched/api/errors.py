@@ -7,9 +7,12 @@ from amortsched.core.errors import (
     DomainError,
     DuplicateEmailError,
     ExpiredTokenError,
+    IncorrectPasswordError,
+    InvalidAccountTokenError,
     InvalidTokenError,
     NotFoundError,
     PlanOwnershipError,
+    RateLimitExceededError,
     RefreshTokenNotFoundError,
     RefreshTokenReplayError,
     ValidationError,
@@ -25,6 +28,9 @@ _ERROR_MAP: list[tuple[type[DomainError], int, str, str]] = [
     (RefreshTokenNotFoundError, 401, "/errors/invalid-refresh-token", "Invalid Refresh Token"),
     (AuthenticationError, 401, "/errors/authentication-failed", "Authentication Failed"),
     (PlanOwnershipError, 403, "/errors/forbidden", "Forbidden"),
+    (IncorrectPasswordError, 403, "/errors/incorrect-password", "Incorrect Password"),
+    (InvalidAccountTokenError, 400, "/errors/invalid-link", "Invalid Link"),
+    (RateLimitExceededError, 429, "/errors/rate-limited", "Too Many Requests"),
     (NotFoundError, 404, "/errors/not-found", "Not Found"),
     (DuplicateEmailError, 409, "/errors/duplicate-email", "Duplicate Email"),
     (AmortizationError, 422, "/errors/validation", "Validation Error"),
@@ -56,4 +62,5 @@ async def domain_error_handler(_: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, DomainError):
         raise exc
     status, body = domain_error_to_problem(exc)
-    return JSONResponse(body, status_code=status, media_type="application/problem+json")
+    headers = {"Retry-After": str(exc.retry_after)} if isinstance(exc, RateLimitExceededError) else None
+    return JSONResponse(body, status_code=status, media_type="application/problem+json", headers=headers)

@@ -4,13 +4,16 @@ from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
-from amortsched.core.entities import Plan, Profile, RefreshToken, Schedule, User
+from amortsched.core.entities import AccountToken, Plan, Profile, RefreshToken, Schedule, User
 from amortsched.core.values import (
     Balance,
     EarlyPaymentFees,
+    HousingCosts,
+    HousingPayment,
     Installment,
     InterestRateApplication,
     InterestRateChange,
+    LoanType,
     Month,
     OneTimeExtraPayment,
     Payment,
@@ -39,6 +42,7 @@ def user_to_values(user: User) -> Mapping[str, object]:
         "email": user.email,
         "name": user.name,
         "is_active": user.is_active,
+        "email_verified_at": user.email_verified_at,
         "password_hash": user.password_hash,
         "created_at": user.created_at,
         "updated_at": user.updated_at,
@@ -51,6 +55,7 @@ def user_from_row(row: Mapping[str, object]) -> User:
         email=cast(str, row["email"]),
         name=cast(str, row["name"]),
         is_active=cast(bool, row["is_active"]),
+        email_verified_at=cast(datetime.datetime | None, row["email_verified_at"]),
         password_hash=cast(str, row["password_hash"]),
         created_at=cast(datetime.datetime, row["created_at"]),
         updated_at=cast(datetime.datetime, row["updated_at"]),
@@ -65,6 +70,7 @@ def profile_to_values(profile: Profile) -> Mapping[str, object]:
         "phone": profile.phone,
         "locale": profile.locale,
         "timezone": profile.timezone,
+        "currency": profile.currency,
         "created_at": profile.created_at,
         "updated_at": profile.updated_at,
     }
@@ -78,6 +84,7 @@ def profile_from_row(row: Mapping[str, object]) -> Profile:
         phone=cast(str | None, row["phone"]),
         locale=cast(str | None, row["locale"]),
         timezone=cast(str | None, row["timezone"]),
+        currency=cast(str | None, row["currency"]),
         created_at=cast(datetime.datetime, row["created_at"]),
         updated_at=cast(datetime.datetime, row["updated_at"]),
     )
@@ -94,9 +101,12 @@ def plan_to_values(plan: Plan) -> Mapping[str, object]:
         "term_months": plan.term.months,
         "interest_rate": plan.interest_rate,
         "start_date": plan.start_date,
+        "loan_type": plan.loan_type.value,
+        "currency": plan.currency,
         "lender": plan.lender,
         "upfront_fees": plan.upfront_fees,
         "early_payment_fees": _early_payment_fees_to_payload(plan.early_payment_fees),
+        "housing_costs": _housing_costs_to_payload(plan.housing_costs),
         "interest_rate_application": plan.interest_rate_application.value,
         "status": plan.status.value,
         "one_time_extra_payments": [_one_time_extra_payment_to_payload(item) for item in plan.one_time_extra_payments],
@@ -120,9 +130,12 @@ def plan_from_row(row: Mapping[str, object]) -> Plan:
         term=Term(cast(int, row["term_years"]), cast(int, row["term_months"])),
         interest_rate=Decimal(str(row["interest_rate"])),
         start_date=cast(datetime.date, row["start_date"]),
+        loan_type=LoanType(cast(str, row["loan_type"])),
+        currency=cast(str, row["currency"]),
         lender=cast(str | None, row["lender"]),
         upfront_fees=Decimal(str(row["upfront_fees"])),
         early_payment_fees=_early_payment_fees_from_payload(cast(Mapping[str, object], row["early_payment_fees"])),
+        housing_costs=_housing_costs_from_payload(cast(Mapping[str, object], row["housing_costs"])),
         interest_rate_application=InterestRateApplication(cast(str, row["interest_rate_application"])),
         status=Plan.Status(cast(str, row["status"])),
         one_time_extra_payments=[
@@ -193,6 +206,30 @@ def refresh_token_from_row(row: Mapping[str, object]) -> RefreshToken:
     )
 
 
+def account_token_to_values(token: AccountToken) -> Mapping[str, object]:
+    return {
+        "id": token.id,
+        "user_id": token.user_id,
+        "purpose": token.purpose.value,
+        "token_hash": token.token_hash,
+        "expires_at": token.expires_at,
+        "used_at": token.used_at,
+        "created_at": token.created_at,
+    }
+
+
+def account_token_from_row(row: Mapping[str, object]) -> AccountToken:
+    return AccountToken(
+        id=cast(UUID, row["id"]),
+        user_id=cast(UUID, row["user_id"]),
+        purpose=AccountToken.Purpose(cast(str, row["purpose"])),
+        token_hash=cast(str, row["token_hash"]),
+        expires_at=cast(datetime.datetime, row["expires_at"]),
+        used_at=cast(datetime.datetime | None, row["used_at"]),
+        created_at=cast(datetime.datetime, row["created_at"]),
+    )
+
+
 def _early_payment_fees_to_payload(fees: EarlyPaymentFees) -> Mapping[str, object]:
     return {
         "fixed": _decimal_to_string(Decimal(fees.fixed)),
@@ -204,6 +241,33 @@ def _early_payment_fees_from_payload(payload: Mapping[str, object]) -> EarlyPaym
     return EarlyPaymentFees(
         fixed=Decimal(str(payload["fixed"])),
         percent=Decimal(str(payload["percent"])),
+    )
+
+
+def _housing_costs_to_payload(costs: HousingCosts) -> Mapping[str, object]:
+    if costs.is_empty:
+        return {}
+    return {
+        "property_value": None if costs.property_value is None else _decimal_to_string(costs.property_value),
+        "property_tax_annual": _decimal_to_string(costs.property_tax_annual),
+        "insurance_annual": _decimal_to_string(costs.insurance_annual),
+        "hoa_monthly": _decimal_to_string(costs.hoa_monthly),
+        "pmi_annual_rate": _decimal_to_string(costs.pmi_annual_rate),
+        "pmi_cancel_ltv": _decimal_to_string(costs.pmi_cancel_ltv),
+    }
+
+
+def _housing_costs_from_payload(payload: Mapping[str, object]) -> HousingCosts:
+    if not payload:
+        return HousingCosts()
+    property_value = payload.get("property_value")
+    return HousingCosts(
+        property_value=None if property_value is None else Decimal(str(property_value)),
+        property_tax_annual=Decimal(str(payload.get("property_tax_annual", "0"))),
+        insurance_annual=Decimal(str(payload.get("insurance_annual", "0"))),
+        hoa_monthly=Decimal(str(payload.get("hoa_monthly", "0"))),
+        pmi_annual_rate=Decimal(str(payload.get("pmi_annual_rate", "0"))),
+        pmi_cancel_ltv=Decimal(str(payload.get("pmi_cancel_ltv", "78"))),
     )
 
 
@@ -232,7 +296,7 @@ def _recurring_extra_payment_to_payload(payment: RecurringExtraPayment) -> Mappi
 def _recurring_extra_payment_from_payload(payload: Mapping[str, object]) -> RecurringExtraPayment:
     return RecurringExtraPayment(
         start_date=_date_from_string(str(payload["start_date"])),
-        amount=cast(Decimal, payload["amount"]),
+        amount=Decimal(str(payload["amount"])),
         count=cast(int, payload["count"]),
     )
 
@@ -251,6 +315,24 @@ def _interest_rate_change_from_payload(payload: Mapping[str, object]) -> Interes
     )
 
 
+def _housing_payment_to_payload(housing: HousingPayment) -> Mapping[str, object]:
+    return {
+        "property_tax": _decimal_to_string(housing.property_tax),
+        "insurance": _decimal_to_string(housing.insurance),
+        "hoa": _decimal_to_string(housing.hoa),
+        "pmi": _decimal_to_string(housing.pmi),
+    }
+
+
+def _housing_payment_from_payload(payload: Mapping[str, object]) -> HousingPayment:
+    return HousingPayment(
+        property_tax=Decimal(str(payload["property_tax"])),
+        insurance=Decimal(str(payload["insurance"])),
+        hoa=Decimal(str(payload["hoa"])),
+        pmi=Decimal(str(payload["pmi"])),
+    )
+
+
 def _installment_to_payload(installment: Installment) -> Mapping[str, object]:
     return {
         "i": installment.i,
@@ -266,12 +348,14 @@ def _installment_to_payload(installment: Installment) -> Mapping[str, object]:
             "before": _decimal_to_string(installment.balance.before),
             "after": _decimal_to_string(installment.balance.after),
         },
+        "housing": None if installment.housing is None else _housing_payment_to_payload(installment.housing),
     }
 
 
 def _installment_from_payload(payload: Mapping[str, object]) -> Installment:
     payment_payload = cast(Mapping[str, object], payload["payment"])
     balance_payload = cast(Mapping[str, object], payload["balance"])
+    housing_payload = cast(Mapping[str, object] | None, payload.get("housing"))
     return Installment(
         i=cast(int | None, payload["i"]),
         year=cast(int, payload["year"]),
@@ -286,6 +370,7 @@ def _installment_from_payload(payload: Mapping[str, object]) -> Installment:
             before=Decimal(str(balance_payload["before"])),
             after=Decimal(str(balance_payload["after"])),
         ),
+        housing=None if housing_payload is None else _housing_payment_from_payload(housing_payload),
     )
 
 
@@ -296,6 +381,8 @@ def _totals_to_payload(totals: ScheduleTotals) -> Mapping[str, object]:
         "fees": _decimal_to_string(totals.fees),
         "months": totals.months,
         "paid_off": totals.paid_off,
+        "pmi": _decimal_to_string(totals.pmi),
+        "escrow": _decimal_to_string(totals.escrow),
     }
 
 
@@ -306,4 +393,6 @@ def _totals_from_payload(payload: Mapping[str, object]) -> ScheduleTotals:
         fees=Decimal(str(payload["fees"])),
         months=cast(int, payload["months"]),
         paid_off=bool(payload["paid_off"]),
+        pmi=Decimal(str(payload.get("pmi", "0"))),
+        escrow=Decimal(str(payload.get("escrow", "0"))),
     )

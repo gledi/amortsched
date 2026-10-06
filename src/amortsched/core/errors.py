@@ -247,3 +247,21 @@ class ValidationError(DomainError):
     def __init__(self, errors: list[dict[str, Any]], message: str = "Validation failed") -> None:  # pyright: ignore[reportExplicitAny]
         super().__init__(message)
         self.errors = errors
+
+
+class InvalidAccountTokenError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("This link is invalid or has expired")
+
+
+class IncorrectPasswordError(DomainError):
+    def __init__(self) -> None:
+        super().__init__("Current password is incorrect")
+
+
+class RateLimitExceededError(DomainError):
+    retry_after: int
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__("Too many attempts. Try again later.")
+        self.retry_after = retry_after

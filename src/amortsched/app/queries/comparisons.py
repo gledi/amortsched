@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from decimal import Decimal
 from types import MappingProxyType
 
-from amortsched.core.entities import Plan
+from amortsched.core.entities import Plan, Schedule
 from amortsched.core.errors import PlanNotFoundError, ValidationError
 from amortsched.core.repositories import AsyncRepository
 from amortsched.core.specifications import Eq, In
-from amortsched.core.values import EarlyPaymentFees, Term
+from amortsched.core.values import EarlyPaymentFees, LoanType, Term
+
+CENT = Decimal("0.01")
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,26 +22,46 @@ class AdjustmentCounts:
 
 
 @dataclass(frozen=True, slots=True)
+class HorizonCost:
+    """What a plan has cost after a number of months if the remaining balance is then paid off."""
+
+    months: int
+    cost: Decimal
+    balance: Decimal
+    payoff_penalty: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class PlanComparisonItem:
     id: uuid.UUID
     name: str
     lender: str | None
+    currency: str
+    loan_type: LoanType
     principal: Decimal
     interest_rate: Decimal
     term: Term
     start_date: datetime.date
     starting_monthly_payment: Decimal
+    starting_monthly_housing: Decimal
+    starting_total_monthly_payment: Decimal
+    down_payment: Decimal | None
+    ltv: Decimal | None
     configured_early_payment_fees: EarlyPaymentFees
     upfront_fees: Decimal
     total_principal: Decimal
     total_interest: Decimal
     schedule_fees: Decimal
     schedule_total_outflow: Decimal
+    total_pmi: Decimal
+    total_escrow: Decimal
     total_cost: Decimal
     payoff_months: int
     payoff_month: str
     paid_off: bool
     adjustment_counts: AdjustmentCounts
+    cumulative_cost: tuple[Decimal, ...]
+    horizon: HorizonCost | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,12 +72,15 @@ class PlanComparison:
     savings_vs_next_best: Decimal | None
     best_plan_ids_by_metric: Mapping[str, tuple[uuid.UUID, ...]]
     plans: tuple[PlanComparisonItem, ...]
+    horizon_months: int | None = None
+    horizon_winner_plan_ids: tuple[uuid.UUID, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class ComparePlansQuery:
     plan_ids: tuple[uuid.UUID, ...]
     user_id: uuid.UUID
+    horizon_months: int | None = None
 
 
 def _lowest_ids(
@@ -78,10 +103,14 @@ class ComparePlansHandler:
         if len(plans_by_id) != len(query.plan_ids):
             raise PlanNotFoundError("comparison selection")
         ordered = [plans_by_id[plan_id] for plan_id in query.plan_ids]
-        items = tuple(self._comparison_item(plan) for plan in ordered)
+        items = tuple(self._comparison_item(plan, query.horizon_months) for plan in ordered)
 
         reasons: list[str] = []
-        if len({item.principal for item in items}) != 1:
+        same_currency = len({item.currency for item in items}) == 1
+        same_principal = len({item.principal for item in items}) == 1
+        if not same_currency:
+            reasons.append("Currencies differ")
+        if not same_principal:
             reasons.append("Principal amounts differ")
         if not all(item.paid_off for item in items):
             reasons.append("One or more schedules did not pay off")
@@ -90,11 +119,19 @@ class ComparePlansHandler:
         best_plan_ids_by_metric = {
             "interest_rate": _lowest_ids(items, lambda item: item.interest_rate),
             "starting_monthly_payment": _lowest_ids(items, lambda item: item.starting_monthly_payment),
+            "starting_total_monthly_payment": _lowest_ids(items, lambda item: item.starting_total_monthly_payment),
             "total_interest": _lowest_ids(items, lambda item: item.total_interest),
             "schedule_fees": _lowest_ids(items, lambda item: item.schedule_fees),
             "upfront_fees": _lowest_ids(items, lambda item: item.upfront_fees),
+            "total_pmi": _lowest_ids(items, lambda item: item.total_pmi),
             "total_cost": _lowest_ids(items, lambda item: item.total_cost),
         }
+
+        horizon_winner_plan_ids: tuple[uuid.UUID, ...] = ()
+        if query.horizon_months is not None:
+            best_plan_ids_by_metric["cost_at_horizon"] = _lowest_ids(items, _horizon_cost)
+            if same_currency and same_principal:
+                horizon_winner_plan_ids = best_plan_ids_by_metric["cost_at_horizon"]
 
         overall_winner_plan_ids: tuple[uuid.UUID, ...] = ()
         savings_vs_next_best: Decimal | None = None
@@ -111,6 +148,8 @@ class ComparePlansHandler:
             savings_vs_next_best=savings_vs_next_best,
             best_plan_ids_by_metric=MappingProxyType(best_plan_ids_by_metric),
             plans=items,
+            horizon_months=query.horizon_months,
+            horizon_winner_plan_ids=horizon_winner_plan_ids,
         )
 
     @staticmethod
@@ -121,7 +160,7 @@ class ComparePlansHandler:
             raise ValidationError([{"field": "plan_ids", "message": "Plan selection must not contain duplicates"}])
 
     @staticmethod
-    def _comparison_item(plan: Plan) -> PlanComparisonItem:
+    def _comparison_item(plan: Plan, horizon_months: int | None = None) -> PlanComparisonItem:
         schedule = plan.generate()
         first_scheduled = next((item for item in schedule.installments if item.i is not None), None)
         if schedule.totals is None or first_scheduled is None or not schedule.installments:
@@ -131,16 +170,38 @@ class ComparePlansHandler:
         totals = schedule.totals
         last_installment = schedule.installments[-1]
         schedule_total_outflow = totals.total_outflow
+        total_cost = schedule_total_outflow + plan.upfront_fees + totals.pmi
+        starting_housing = first_scheduled.housing.total if first_scheduled.housing is not None else Decimal("0.00")
+        ltv = plan.housing_costs.ltv_percent(plan.amount)
+        finance_cost = plan.upfront_fees + totals.interest + totals.fees + totals.pmi
+        cumulative_cost, balances = _cost_timeline(schedule, plan.upfront_fees, finance_cost, totals.paid_off)
+        horizon = None
+        if horizon_months is not None:
+            month = min(horizon_months, len(cumulative_cost) - 1)
+            balance = balances[month]
+            penalty = plan.early_payment_fees.penalty(balance) if balance > 0 else Decimal("0.00")
+            horizon = HorizonCost(
+                months=horizon_months,
+                cost=(cumulative_cost[month] + penalty).quantize(CENT),
+                balance=balance.quantize(CENT),
+                payoff_penalty=penalty.quantize(CENT),
+            )
 
         return PlanComparisonItem(
             id=plan.id,
             name=plan.name,
             lender=plan.lender,
+            currency=plan.currency,
+            loan_type=plan.loan_type,
             principal=plan.amount,
             interest_rate=plan.interest_rate,
             term=Term(plan.term.years, plan.term.months),
             start_date=plan.start_date,
             starting_monthly_payment=first_scheduled.payment.total,
+            starting_monthly_housing=starting_housing,
+            starting_total_monthly_payment=first_scheduled.payment.total + starting_housing,
+            down_payment=plan.housing_costs.down_payment(plan.amount),
+            ltv=None if ltv is None else ltv.quantize(CENT),
             configured_early_payment_fees=EarlyPaymentFees(
                 fixed=plan.early_payment_fees.fixed,
                 percent=plan.early_payment_fees.percent,
@@ -150,7 +211,9 @@ class ComparePlansHandler:
             total_interest=totals.interest,
             schedule_fees=totals.fees,
             schedule_total_outflow=schedule_total_outflow,
-            total_cost=schedule_total_outflow + plan.upfront_fees,
+            total_pmi=totals.pmi,
+            total_escrow=totals.escrow,
+            total_cost=total_cost,
             payoff_months=totals.months,
             payoff_month=f"{last_installment.year:04d}-{int(last_installment.month):02d}",
             paid_off=totals.paid_off,
@@ -159,4 +222,34 @@ class ComparePlansHandler:
                 recurring_extra_payments=len(plan.recurring_extra_payments),
                 interest_rate_changes=len(plan.interest_rate_changes),
             ),
+            cumulative_cost=cumulative_cost,
+            horizon=horizon,
         )
+
+
+def _horizon_cost(item: PlanComparisonItem) -> Decimal:
+    return item.horizon.cost if item.horizon is not None else item.total_cost
+
+
+def _cost_timeline(
+    schedule: Schedule, upfront_fees: Decimal, finance_cost: Decimal, paid_off: bool
+) -> tuple[tuple[Decimal, ...], tuple[Decimal, ...]]:
+    """Cumulative finance cost (everything but principal) and remaining balance per scheduled month.
+
+    Index 0 is loan signing, where only upfront fees have been paid.
+    """
+    plan_amount = schedule.installments[0].balance.before if schedule.installments else Decimal("0.00")
+    running = upfront_fees
+    costs = [running.quantize(CENT)]
+    balances = [plan_amount]
+    for installment in schedule.installments:
+        pmi = installment.housing.pmi if installment.housing is not None else Decimal("0.00")
+        running += installment.payment.interest + installment.payment.fees + pmi
+        if installment.i is not None:
+            costs.append(running.quantize(CENT))
+            balances.append(installment.balance.after)
+    final_cost = finance_cost.quantize(CENT)
+    if costs[-1] != final_cost or (paid_off and balances[-1] > 0):
+        costs.append(final_cost)
+        balances.append(Decimal("0.00"))
+    return tuple(costs), tuple(balances)

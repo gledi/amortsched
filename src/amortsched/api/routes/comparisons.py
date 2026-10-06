@@ -13,5 +13,6 @@ async def preview_comparison(
     user_id: CurrentUserId,
     handler: ComparePlans,
 ) -> PlanComparisonResponse:
-    result = await handler.handle(ComparePlansQuery(plan_ids=tuple(body.plan_ids), user_id=user_id))
+    query = ComparePlansQuery(plan_ids=tuple(body.plan_ids), user_id=user_id, horizon_months=body.horizon_months)
+    result = await handler.handle(query)
     return PlanComparisonResponse.from_result(result)

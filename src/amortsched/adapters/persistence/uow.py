@@ -5,6 +5,7 @@ from typing import Self, override
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from amortsched.adapters.persistence.repositories import (
+    AsyncSqlAlchemyAccountTokenRepository,
     AsyncSqlAlchemyPlanRepository,
     AsyncSqlAlchemyProfileRepository,
     AsyncSqlAlchemyRefreshTokenRepository,
@@ -29,6 +30,7 @@ class AsyncSqlAlchemyUnitOfWork(AsyncUnitOfWork):
         self.plans = AsyncSqlAlchemyPlanRepository(self._session)
         self.schedules = AsyncSqlAlchemyScheduleRepository(self._session)
         self.refresh_tokens = AsyncSqlAlchemyRefreshTokenRepository(self._session)
+        self.account_tokens = AsyncSqlAlchemyAccountTokenRepository(self._session)
 
     @override
     async def commit(self) -> None:

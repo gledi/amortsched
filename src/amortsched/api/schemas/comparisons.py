@@ -5,11 +5,15 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, model_validator
 
 from amortsched.api.schemas.plans import EarlyPaymentFeesSchema, TermSchema
-from amortsched.app.queries.comparisons import PlanComparison, PlanComparisonItem
+from amortsched.app.queries.comparisons import HorizonCost, PlanComparison, PlanComparisonItem
+from amortsched.core.values import LoanType
+
+CENT = Decimal("0.01")
 
 
 class PlanComparisonRequest(BaseModel):
     plan_ids: list[uuid.UUID] = Field(min_length=2, max_length=4)
+    horizon_months: int | None = Field(default=None, ge=1, le=600)
 
     @model_validator(mode="after")
     def validate_unique_plan_ids(self) -> "PlanComparisonRequest":
@@ -24,26 +28,52 @@ class AdjustmentCountsResponse(BaseModel):
     interest_rate_changes: int
 
 
+class HorizonCostResponse(BaseModel):
+    months: int
+    cost: Decimal
+    balance: Decimal
+    payoff_penalty: Decimal
+
+    @classmethod
+    def from_result(cls, horizon: HorizonCost) -> "HorizonCostResponse":
+        return cls(
+            months=horizon.months,
+            cost=horizon.cost,
+            balance=horizon.balance,
+            payoff_penalty=horizon.payoff_penalty,
+        )
+
+
 class PlanComparisonItemResponse(BaseModel):
     id: uuid.UUID
     name: str
     lender: str | None
+    currency: str
+    loan_type: LoanType
     principal: Decimal
     interest_rate: Decimal
     term: TermSchema
     start_date: datetime.date
     starting_monthly_payment: Decimal
+    starting_monthly_housing: Decimal
+    starting_total_monthly_payment: Decimal
+    down_payment: Decimal | None
+    ltv: Decimal | None
     configured_early_payment_fees: EarlyPaymentFeesSchema
     upfront_fees: Decimal
     total_principal: Decimal
     total_interest: Decimal
     schedule_fees: Decimal
     schedule_total_outflow: Decimal
+    total_pmi: Decimal
+    total_escrow: Decimal
     total_cost: Decimal
     payoff_months: int
     payoff_month: str
     paid_off: bool
     adjustment_counts: AdjustmentCountsResponse
+    cumulative_cost: list[Decimal]
+    horizon: HorizonCostResponse | None
 
     @classmethod
     def from_result(cls, item: PlanComparisonItem) -> "PlanComparisonItemResponse":
@@ -51,11 +81,17 @@ class PlanComparisonItemResponse(BaseModel):
             id=item.id,
             name=item.name,
             lender=item.lender,
+            currency=item.currency,
+            loan_type=item.loan_type,
             principal=item.principal,
             interest_rate=item.interest_rate,
             term=TermSchema(years=item.term.years, months=item.term.months),
             start_date=item.start_date,
-            starting_monthly_payment=item.starting_monthly_payment,
+            starting_monthly_payment=item.starting_monthly_payment.quantize(CENT),
+            starting_monthly_housing=item.starting_monthly_housing.quantize(CENT),
+            starting_total_monthly_payment=item.starting_total_monthly_payment.quantize(CENT),
+            down_payment=item.down_payment,
+            ltv=item.ltv,
             configured_early_payment_fees=EarlyPaymentFeesSchema(
                 fixed=Decimal(item.configured_early_payment_fees.fixed),
                 percent=Decimal(item.configured_early_payment_fees.percent),
@@ -65,7 +101,9 @@ class PlanComparisonItemResponse(BaseModel):
             total_interest=item.total_interest,
             schedule_fees=item.schedule_fees,
             schedule_total_outflow=item.schedule_total_outflow,
-            total_cost=item.total_cost.quantize(Decimal("0.01")),
+            total_pmi=item.total_pmi.quantize(CENT),
+            total_escrow=item.total_escrow.quantize(CENT),
+            total_cost=item.total_cost.quantize(CENT),
             payoff_months=item.payoff_months,
             payoff_month=item.payoff_month,
             paid_off=item.paid_off,
@@ -74,6 +112,8 @@ class PlanComparisonItemResponse(BaseModel):
                 recurring_extra_payments=item.adjustment_counts.recurring_extra_payments,
                 interest_rate_changes=item.adjustment_counts.interest_rate_changes,
             ),
+            cumulative_cost=list(item.cumulative_cost),
+            horizon=None if item.horizon is None else HorizonCostResponse.from_result(item.horizon),
         )
 
 
@@ -84,6 +124,8 @@ class PlanComparisonResponse(BaseModel):
     savings_vs_next_best: Decimal | None
     best_plan_ids_by_metric: dict[str, list[uuid.UUID]]
     plans: list[PlanComparisonItemResponse]
+    horizon_months: int | None
+    horizon_winner_plan_ids: list[uuid.UUID]
 
     @classmethod
     def from_result(cls, result: PlanComparison) -> "PlanComparisonResponse":
@@ -94,4 +136,6 @@ class PlanComparisonResponse(BaseModel):
             savings_vs_next_best=result.savings_vs_next_best,
             best_plan_ids_by_metric={key: list(ids) for key, ids in result.best_plan_ids_by_metric.items()},
             plans=[PlanComparisonItemResponse.from_result(item) for item in result.plans],
+            horizon_months=result.horizon_months,
+            horizon_winner_plan_ids=list(result.horizon_winner_plan_ids),
         )

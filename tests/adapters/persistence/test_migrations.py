@@ -40,18 +40,35 @@ def test_initial_migration_builds_schema(postgres, monkeypatch):
             )
         command.upgrade(config, "head")
         inspector = inspect(engine)
-        assert {"alembic_version", "users", "profiles", "plans", "schedules", "refresh_tokens"} <= set(
-            inspector.get_table_names()
-        )
+        assert {
+            "alembic_version",
+            "users",
+            "profiles",
+            "plans",
+            "schedules",
+            "refresh_tokens",
+            "account_tokens",
+        } <= set(inspector.get_table_names())
+        user_columns = {column["name"]: column for column in inspector.get_columns("users")}
+        assert user_columns["email_verified_at"]["nullable"] is True
+        profile_columns = {column["name"] for column in inspector.get_columns("profiles")}
+        assert "currency" in profile_columns
+        token_indexes = {index["name"]: index for index in inspector.get_indexes("account_tokens")}
+        assert token_indexes["ix_account_tokens_token_hash"]["unique"]
         columns = {column["name"]: column for column in inspector.get_columns("plans")}
         assert columns["lender"]["nullable"] is True
         assert columns["upfront_fees"]["nullable"] is False
         assert columns["upfront_fees"]["default"] is not None
 
         with engine.begin() as connection:
-            existing = connection.execute(text("SELECT lender, upfront_fees FROM plans")).one()
+            existing = connection.execute(
+                text("SELECT lender, upfront_fees, loan_type, currency, housing_costs FROM plans")
+            ).one()
             assert existing.lender is None
             assert existing.upfront_fees == Decimal("0.00")
+            assert existing.loan_type == "other"
+            assert existing.currency == "USD"
+            assert existing.housing_costs == {}
             connection.execute(text("UPDATE plans SET upfront_fees = 12"))
             connection.execute(text("UPDATE plans SET upfront_fees = DEFAULT"))
             assert connection.execute(text("SELECT upfront_fees FROM plans")).scalar_one() == Decimal("0.00")

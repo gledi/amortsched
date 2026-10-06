@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import uuid
 from collections.abc import AsyncIterator, Sequence
@@ -15,6 +16,7 @@ from amortsched.core.specifications import Specification
 from amortsched.core.values import (
     Balance,
     EarlyPaymentFees,
+    HousingCosts,
     Installment,
     InterestRateChange,
     Month,
@@ -370,3 +372,104 @@ async def test_compare_plans_returns_immutable_term_and_fee_snapshots():
         item.configured_early_payment_fees.fixed = Decimal("9.00")  # pyright: ignore[reportAttributeAccessIssue]
     assert first.term.years == 1
     assert first.early_payment_fees.fixed == Decimal("2.00")
+
+
+@pytest.mark.anyio
+async def test_compare_plans_marks_different_currencies_incomparable():
+    first = make_plan(name="Alpha")
+    second = dataclasses.replace(make_plan(name="Beta"), currency="EUR")
+
+    result = await ComparePlansHandler(ReadOnlyPlanRepo([first, second])).handle(
+        ComparePlansQuery(plan_ids=(first.id, second.id), user_id=USER_ID)
+    )
+
+    assert result.directly_comparable is False
+    assert result.incomparability_reasons == ("Currencies differ",)
+    assert result.overall_winner_plan_ids == ()
+    assert [item.currency for item in result.plans] == ["USD", "EUR"]
+
+
+@pytest.mark.anyio
+async def test_compare_plans_counts_pmi_as_loan_cost_but_not_escrow():
+    housing = HousingCosts(
+        property_value=Decimal("1000"),
+        property_tax_annual=Decimal("120"),
+        pmi_annual_rate=Decimal("12"),
+    )
+    insured = dataclasses.replace(make_plan(name="Low down"), housing_costs=housing)
+    plain = make_plan(name="Plain")
+
+    result = await ComparePlansHandler(ReadOnlyPlanRepo([insured, plain])).handle(
+        ComparePlansQuery(plan_ids=(insured.id, plain.id), user_id=USER_ID)
+    )
+
+    item = result.plans[0]
+    assert item.ltv == Decimal("120.00")
+    assert item.down_payment == Decimal("0.00")
+    assert item.total_pmi > 0
+    assert item.total_escrow == Decimal("120")
+    assert item.starting_monthly_housing == Decimal("22")
+    assert item.starting_total_monthly_payment == Decimal("122.00")
+    assert item.total_cost == Decimal("1200.00") + item.total_pmi
+    assert result.overall_winner_plan_ids == (plain.id,)
+    assert result.best_plan_ids_by_metric["total_pmi"] == (plain.id,)
+
+
+@pytest.mark.anyio
+async def test_compare_plans_cumulative_cost_starts_at_upfront_fees_and_ends_at_total_cost():
+    plan = make_plan(name="Alpha", interest_rate="12", upfront_fees="25")
+    other = make_plan(name="Beta")
+
+    result = await ComparePlansHandler(ReadOnlyPlanRepo([plan, other])).handle(
+        ComparePlansQuery(plan_ids=(plan.id, other.id), user_id=USER_ID)
+    )
+
+    item = result.plans[0]
+    series = item.cumulative_cost
+    assert series[0] == Decimal("25.00")
+    assert series[-1] == (Decimal("25") + item.total_interest).quantize(Decimal("0.01"))
+    assert list(series) == sorted(series)
+    assert len(series) == 13
+
+
+@pytest.mark.anyio
+async def test_compare_plans_horizon_includes_payoff_penalty_and_can_change_the_winner():
+    no_fee_high_rate = make_plan(name="High rate", interest_rate="12")
+    fee_no_rate = make_plan(name="Fee only", upfront_fees="50")
+    handler = ComparePlansHandler(ReadOnlyPlanRepo([no_fee_high_rate, fee_no_rate]))
+
+    full = await handler.handle(ComparePlansQuery(plan_ids=(no_fee_high_rate.id, fee_no_rate.id), user_id=USER_ID))
+    assert full.overall_winner_plan_ids == (fee_no_rate.id,)
+    assert full.horizon_months is None
+    assert full.plans[0].horizon is None
+
+    early = await handler.handle(
+        ComparePlansQuery(plan_ids=(no_fee_high_rate.id, fee_no_rate.id), user_id=USER_ID, horizon_months=1)
+    )
+    zero_rate = early.plans[1].horizon
+    assert zero_rate is not None
+    assert zero_rate.balance == Decimal("1100.00")
+    assert zero_rate.payoff_penalty == Decimal("13.00")
+    assert zero_rate.cost == Decimal("63.00")
+    high_rate = early.plans[0].horizon
+    assert high_rate is not None
+    assert high_rate.cost < zero_rate.cost
+    assert early.horizon_winner_plan_ids == (no_fee_high_rate.id,)
+    assert early.best_plan_ids_by_metric["cost_at_horizon"] == (no_fee_high_rate.id,)
+    assert early.overall_winner_plan_ids == (fee_no_rate.id,)
+
+
+@pytest.mark.anyio
+async def test_compare_plans_horizon_beyond_payoff_uses_total_cost():
+    first = make_plan(name="Alpha", upfront_fees="10")
+    second = make_plan(name="Beta")
+
+    result = await ComparePlansHandler(ReadOnlyPlanRepo([first, second])).handle(
+        ComparePlansQuery(plan_ids=(first.id, second.id), user_id=USER_ID, horizon_months=360)
+    )
+
+    horizon = result.plans[0].horizon
+    assert horizon is not None
+    assert horizon.balance == Decimal("0.00")
+    assert horizon.payoff_penalty == Decimal("0.00")
+    assert horizon.cost == Decimal("10.00")

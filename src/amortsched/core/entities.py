@@ -18,12 +18,17 @@ from amortsched.core.errors import (
     UnboundScheduleError,
     UserAssociationError,
 )
+from amortsched.core.housing import apply_housing_costs
 from amortsched.core.utils import now
 from amortsched.core.values import (
+    DEFAULT_CURRENCY,
     EarlyPaymentFees,
+    HousingCosts,
+    HousingPayment,
     Installment,
     InterestRateApplication,
     InterestRateChange,
+    LoanType,
     OneTimeExtraPayment,
     RecurringExtraPayment,
     ScheduleTotals,
@@ -71,6 +76,24 @@ class RefreshToken:
 
 
 @dataclass(kw_only=True, slots=True)
+class AccountToken:
+    class Purpose(enum.StrEnum):
+        EmailVerification = "email_verification"
+        PasswordReset = "password_reset"
+
+    id: uuid.UUID = field(default_factory=uuid.uuid7)
+    user_id: uuid.UUID
+    purpose: Purpose
+    token_hash: str
+    expires_at: datetime.datetime
+    used_at: datetime.datetime | None = None
+    created_at: datetime.datetime = field(default_factory=now)
+
+    def is_usable(self, at: datetime.datetime) -> bool:
+        return self.used_at is None and self.expires_at > at
+
+
+@dataclass(kw_only=True, slots=True)
 class Plan:
     class Status(enum.StrEnum):
         Draft = "draft"
@@ -87,8 +110,11 @@ class Plan:
     term: Term
     interest_rate: Decimal
     start_date: datetime.date
+    loan_type: LoanType = LoanType.Other
+    currency: str = DEFAULT_CURRENCY
     lender: str | None = None
     upfront_fees: Decimal = Decimal("0.00")
+    housing_costs: HousingCosts = field(default_factory=HousingCosts)
     early_payment_fees: EarlyPaymentFees = field(default_factory=EarlyPaymentFees)
     interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth
     status: Status = Status.Draft
@@ -155,9 +181,25 @@ class Plan:
         schedule_engine = self.to_schedule()
         installments = list(schedule_engine.generate(self.start_date))
         totals = schedule_engine.last_totals
+        if totals is not None and not self.housing_costs.is_empty:
+            totals.escrow, totals.pmi = apply_housing_costs(installments, self.housing_costs, self.amount)
         schedule = Schedule(plan_id=self.id, installments=installments, totals=totals)
         schedule.plan = self
         return schedule
+
+    @property
+    def monthly_payment(self) -> Decimal:
+        """Scheduled principal and interest at the plan's starting rate."""
+        return self.to_schedule().monthly_installment
+
+    @property
+    def starting_housing_payment(self) -> HousingPayment | None:
+        if self.housing_costs.is_empty:
+            return None
+        return self.housing_costs.monthly_payment(
+            loan_amount=self.amount,
+            pmi_active=self.housing_costs.pmi_applies(self.amount),
+        )
 
     def touch(self) -> None:
         self.updated_at = now()
@@ -171,6 +213,7 @@ class Profile:
     phone: str | None = None
     locale: str | None = None
     timezone: str | None = None
+    currency: str | None = None
 
     created_at: datetime.datetime = field(default_factory=now)
     updated_at: datetime.datetime = field(default_factory=now)
@@ -199,6 +242,7 @@ class User:
     name: str
 
     is_active: bool = True
+    email_verified_at: datetime.datetime | None = None
 
     password_hash: str = field(default="", repr=False)
 
@@ -223,6 +267,10 @@ class User:
     @profile.setter
     def profile(self, profile: Profile | None) -> None:
         self._profile = profile
+
+    @property
+    def email_verified(self) -> bool:
+        return self.email_verified_at is not None
 
     def add_profile(self, profile: Profile) -> None:
         if profile.user_id != self.id:

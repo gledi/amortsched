@@ -11,6 +11,7 @@ from amortsched.api.routes.auth import router as auth_router
 from amortsched.api.routes.comparisons import router as comparisons_router
 from amortsched.api.routes.plans import router as plans_router
 from amortsched.api.routes.schedules import router as schedules_router
+from amortsched.api.routes.tools import router as tools_router
 from amortsched.api.routes.users import router as users_router
 from amortsched.core.errors import DomainError
 
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(plans_router)
     app.include_router(comparisons_router)
     app.include_router(schedules_router)
+    app.include_router(tools_router)
     return app
 
 

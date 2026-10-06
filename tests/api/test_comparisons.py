@@ -182,3 +182,39 @@ async def test_preview_returns_422_when_generation_fails_without_saving_schedule
     for plan_id in (first_id, second_id):
         schedules = await client.get(f"/api/plans/{plan_id}/schedules", headers=auth_headers)
         assert schedules.json() == []
+
+
+@pytest.mark.anyio
+async def test_preview_with_horizon_and_currency_details(client, auth_headers):
+    first_id = await create_offer(client, auth_headers, "Alpha", "100")
+    second_id = await create_offer(client, auth_headers, "Beta", "20")
+
+    response = await client.post(
+        "/api/plan-comparisons/preview",
+        json={"plan_ids": [first_id, second_id], "horizon_months": 6},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["horizon_months"] == 6
+    assert body["horizon_winner_plan_ids"] == [second_id]
+    first = body["plans"][0]
+    assert first["currency"] == "USD"
+    assert first["cumulative_cost"][0] == "100.00"
+    assert len(first["cumulative_cost"]) == 13
+    assert first["horizon"] == {"months": 6, "cost": "100.00", "balance": "600.00", "payoff_penalty": "0.00"}
+    assert first["starting_total_monthly_payment"] == "100.00"
+    assert first["total_pmi"] == "0.00"
+
+
+@pytest.mark.anyio
+async def test_preview_rejects_out_of_range_horizon(client, auth_headers):
+    first_id = await create_offer(client, auth_headers, "Alpha", "100")
+    second_id = await create_offer(client, auth_headers, "Beta", "20")
+    response = await client.post(
+        "/api/plan-comparisons/preview",
+        json={"plan_ids": [first_id, second_id], "horizon_months": 0},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422

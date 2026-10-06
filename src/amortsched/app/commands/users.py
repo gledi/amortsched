@@ -15,6 +15,7 @@ from amortsched.core.repositories import AsyncRepository, RefreshTokenRepository
 from amortsched.core.security import PasswordHasher
 from amortsched.core.specifications import Eq
 from amortsched.core.utils import now
+from amortsched.core.values import normalize_currency
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,7 @@ class UpsertProfileCommand:
     phone: str | None = None
     locale: str | None = None
     timezone: str | None = None
+    currency: str | None = None
 
 
 class UpsertProfileHandler:
@@ -75,12 +77,14 @@ class UpsertProfileHandler:
         if user is None:
             raise UserNotFoundError(command.user_id)
 
+        currency = normalize_currency(command.currency) if command.currency else None
         existing = await self._profile_repo.get_one_or_none(Eq("user_id", command.user_id))
         if existing is not None:
             existing.display_name = command.display_name
             existing.phone = command.phone
             existing.locale = command.locale
             existing.timezone = command.timezone
+            existing.currency = currency
             existing.touch()
             _ = await self._profile_repo.update(existing)
             return existing
@@ -91,6 +95,7 @@ class UpsertProfileHandler:
             phone=command.phone,
             locale=command.locale,
             timezone=command.timezone,
+            currency=currency,
         )
         _ = await self._profile_repo.add(profile)
         return profile
