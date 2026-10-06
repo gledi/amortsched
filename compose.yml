@@ -18,12 +18,19 @@ services:
     build:
       context: .
       target: dev
-    command: uvicorn amortsched.api.app:app --reload --host 0.0.0.0 --port 8000
+    command: uvicorn amortsched.api.app:app --reload --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips "*"
     volumes:
       - ./src:/app/src
     environment:
       DATABASE__DSN: postgresql+psycopg://amortsched:amortsched@db:5432/amortsched
       SECURITY__SECRET_KEY: dev-secret-key-change-in-production
+      SECURITY__COOKIE_SECURE: "false"
+      PUBLIC_URL: http://localhost:3000
+      EMAIL__BACKEND: smtp
+      EMAIL__HOST: mail
+      EMAIL__PORT: "1025"
+      RATE_LIMIT__BACKEND: redis
+      RATE_LIMIT__REDIS_URL: redis://cache:6379/0
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
@@ -33,6 +40,8 @@ services:
       db:
         condition: service_healthy
       cache:
+        condition: service_healthy
+      mail:
         condition: service_healthy
 
   ui:
@@ -73,6 +82,17 @@ services:
       - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mail:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
       interval: 5s
       timeout: 3s
       retries: 5

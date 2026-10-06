@@ -162,7 +162,7 @@ run/api: ## Start the API dev server (uvicorn, autoreload)
 .PHONY: up up/app up/debug build up/build up/attach down destroy ps top stats start stop restart logs sh
 
 ##@ Compose
-up: ## Start infra services (db, cache) [service...]
+up: ## Start infra services (db, cache, mail; Mailpit UI on :8025) [service...]
 	$(COMPOSE) up -d --wait $(ARGS)
 
 up/app: ## Start full app stack (app profile) [service...]
