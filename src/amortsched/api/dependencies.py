@@ -63,7 +63,8 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
             await session.commit()  # pyright: ignore[reportAny]
 
 
-type DbSession = Annotated[AsyncSession, Depends(get_session)]
+# Function scope commits before the response is sent, so clients never read ahead of their own writes.
+type DbSession = Annotated[AsyncSession, Depends(get_session, scope="function")]
 type AppSettings = Annotated[Settings, Depends(get_settings)]
 type PasswordHash = Annotated[PBKDF2PasswordHasher, Depends(get_password_hasher)]
 
