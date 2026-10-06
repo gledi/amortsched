@@ -83,8 +83,9 @@ async def login(
     guard: RateLimitGuard,
     settings: ApiConfig,
 ) -> TokenResponse:
-    await guard.check(f"login:ip:{client_ip(request)}", limit=30, window_seconds=300)
-    await guard.check(f"login:email:{form_data.username.casefold()}", limit=10, window_seconds=900)
+    ip = client_ip(request)
+    await guard.check(f"login:ip:{ip}", limit=30, window_seconds=300)
+    await guard.check(f"login:ip-email:{ip}:{form_data.username.casefold()}", limit=10, window_seconds=900)
     user = await handler.handle(AuthenticateUserCommand(email=form_data.username, password=form_data.password))
     refresh_token = await refresh_handler.handle(CreateRefreshTokenCommand(user_id=user.id))
     set_refresh_cookie(response, refresh_token, settings)
@@ -130,8 +131,9 @@ async def request_password_reset(
     handler: RequestPasswordReset,
     guard: RateLimitGuard,
 ) -> None:
-    await guard.check(f"password-reset:ip:{client_ip(request)}", limit=10, window_seconds=900)
-    await guard.check(f"password-reset:email:{body.email.casefold()}", limit=3, window_seconds=900)
+    ip = client_ip(request)
+    await guard.check(f"password-reset:ip:{ip}", limit=10, window_seconds=900)
+    await guard.check(f"password-reset:ip-email:{ip}:{body.email.casefold()}", limit=3, window_seconds=900)
     await handler.handle(RequestPasswordResetCommand(email=body.email))
 
 

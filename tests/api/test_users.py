@@ -154,3 +154,12 @@ async def test_delete_account_requires_password_and_removes_everything(client, a
         json={"email": "test@example.com", "name": "Fresh", "password": "testpass123"},
     )
     assert again.status_code == 201
+
+
+@pytest.mark.anyio
+async def test_account_deletion_password_attempts_are_rate_limited(client, auth_headers):
+    statuses = [
+        (await client.request("DELETE", "/api/users/me", json={"password": "guess"}, headers=auth_headers)).status_code
+        for _ in range(6)
+    ]
+    assert statuses == [403] * 5 + [429]

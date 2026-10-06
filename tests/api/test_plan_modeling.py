@@ -204,3 +204,11 @@ async def test_schedule_csv_export(client, auth_headers):
     assert scheduled["property_tax"] == "400.00"
     assert scheduled["pmi"] == "150.00"
     assert scheduled["total_payment"] == "2833.38"
+
+
+@pytest.mark.anyio
+async def test_schedule_csv_filename_is_sanitized(client, auth_headers):
+    plan = await create(client, auth_headers, name='Weird "name"; x=1')
+    response = await client.get(f"/api/plans/{plan['id']}/schedule.csv", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.headers["content-disposition"] == 'attachment; filename="weird-name-x-1-schedule.csv"'

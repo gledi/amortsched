@@ -1,0 +1,42 @@
+default_language_version = { python = "python3.14" }
+
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer", exclude = '^.+\.html$' },
+  { id = "check-json", exclude = '^(\.vscode/|ui/tsconfig.*\.json$)' },
+  { id = "check-yaml" },
+  { id = "check-toml" },
+  { id = "check-added-large-files" },
+  { id = "check-merge-conflict" },
+]
+
+[[repos]]
+repo = "https://github.com/pre-commit/pre-commit-hooks"
+rev = "v6.0.0"
+hooks = [{ id = "check-ast" }, { id = "debug-statements" }]
+
+[[repos]]
+repo = "https://github.com/DetachHead/basedpyright-prek-mirror"
+rev = "1.40.2"
+hooks = [{ id = "basedpyright", files = "^src/" }]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "ruff-check"
+name = "ruff check"
+entry = "uv run ruff check --force-exclude --config=pyproject.toml"
+language = "system"
+types_or = ["python", "pyi"]
+require_serial = true
+
+[[repos.hooks]]
+id = "ruff-format"
+name = "ruff format"
+entry = "uv run ruff format --force-exclude --check --config=pyproject.toml"
+language = "system"
+types_or = ["python", "pyi"]
+require_serial = true

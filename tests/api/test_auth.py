@@ -1,3 +1,4 @@
+import httpx2 as httpx
 import pytest
 
 from amortsched.api.cookies import REFRESH_COOKIE_NAME, REFRESH_COOKIE_PATH
@@ -218,3 +219,37 @@ async def test_password_reset_for_unknown_email_is_silent(client, outbox):
 async def test_password_reset_confirm_validates_password(client):
     resp = await client.post("/api/auth/password-reset/confirm", json={"token": "x", "password": "short"})
     assert resp.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_login_throttling_does_not_lock_out_the_owner_on_another_ip(client, register_user):
+    await register_user(client, "victim@example.com")
+    for _ in range(11):
+        await login(client, "victim@example.com", "wrongpassword")
+    assert (await login(client, "victim@example.com")).status_code == 429
+
+    transport = httpx.ASGITransport(app=client._transport.app, client=("203.0.113.7", 4000))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as owner:
+        assert (await login(owner, "victim@example.com")).status_code == 200
+
+
+@pytest.mark.anyio
+async def test_password_reset_requests_are_throttled_per_ip_and_email(client, outbox, register_user):
+    await register_user(client, "reset-limit@example.com")
+    outbox.messages.clear()
+    statuses = [
+        (await client.post("/api/auth/password-reset/request", json={"email": "reset-limit@example.com"})).status_code
+        for _ in range(4)
+    ]
+    assert statuses == [202, 202, 202, 429]
+    assert len(outbox.messages) == 3
+
+
+def test_emails_do_not_echo_user_supplied_names():
+    from amortsched.app.emails import password_reset_email, verification_email
+    from amortsched.core.entities import User
+
+    user = User(email="victim@example.com", name="Visit http://evil.example to claim a prize")
+    for message in (verification_email(user, "http://app", "t"), password_reset_email(user, "http://app", "t")):
+        assert "evil.example" not in message.text
+        assert message.html is not None and "evil.example" not in message.html

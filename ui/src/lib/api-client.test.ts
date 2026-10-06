@@ -33,6 +33,8 @@ describe("safeRedirectTarget", () => {
   it("rejects external and protocol-relative targets", () => {
     expect(safeRedirectTarget("https://evil.example")).toBe("/");
     expect(safeRedirectTarget("//evil.example")).toBe("/");
+    expect(safeRedirectTarget("/\\evil.example")).toBe("/");
+    expect(safeRedirectTarget("/\t/evil.example")).toBe("/");
     expect(safeRedirectTarget(undefined)).toBe("/");
   });
 });

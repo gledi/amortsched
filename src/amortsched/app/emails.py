@@ -12,12 +12,12 @@ def verification_email(user: User, public_url: str, token: str) -> EmailMessage:
         to=user.email,
         subject="Confirm your email address",
         text=(
-            f"Hi {user.name},\n\n"
+            "Hi,\n\n"
             f"Confirm your email address to finish setting up your account:\n\n{link}\n\n"
             "This link expires in 48 hours. If you did not create an account, ignore this email.\n"
         ),
         html=(
-            f"<p>Hi {_escape(user.name)},</p>"
+            "<p>Hi,</p>"
             "<p>Confirm your email address to finish setting up your account:</p>"
             f'<p><a href="{link}">Confirm email address</a></p>'
             "<p>This link expires in 48 hours. If you did not create an account, ignore this email.</p>"
@@ -31,18 +31,14 @@ def password_reset_email(user: User, public_url: str, token: str) -> EmailMessag
         to=user.email,
         subject="Reset your password",
         text=(
-            f"Hi {user.name},\n\n"
+            "Hi,\n\n"
             f"Someone asked to reset the password for your account. Choose a new one here:\n\n{link}\n\n"
             "This link expires in 1 hour. If you did not ask for this, you can ignore this email.\n"
         ),
         html=(
-            f"<p>Hi {_escape(user.name)},</p>"
+            "<p>Hi,</p>"
             "<p>Someone asked to reset the password for your account. Choose a new one here:</p>"
             f'<p><a href="{link}">Reset password</a></p>'
             "<p>This link expires in 1 hour. If you did not ask for this, you can ignore this email.</p>"
         ),
     )
-
-
-def _escape(value: str) -> str:
-    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")

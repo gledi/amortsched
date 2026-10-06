@@ -52,6 +52,12 @@ export async function logout(): Promise<void> {
 }
 
 export function safeRedirectTarget(target: string | undefined): string {
-  if (!target || !target.startsWith("/") || target.startsWith("//")) return "/";
-  return target;
+  if (!target || !target.startsWith("/") || /[\\\s]/.test(target)) return "/";
+  try {
+    const url = new URL(target, window.location.origin);
+    if (url.origin !== window.location.origin) return "/";
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return "/";
+  }
 }

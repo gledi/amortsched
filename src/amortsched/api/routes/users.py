@@ -76,8 +76,10 @@ async def delete_current_user(
     response: Response,
     current_user_id: CurrentUserId,
     handler: DeleteAccount,
+    guard: RateLimitGuard,
     settings: ApiConfig,
 ) -> None:
+    await guard.check(f"delete-account:user:{current_user_id}", limit=5, window_seconds=900)
     await handler.handle(DeleteAccountCommand(user_id=current_user_id, password=body.password))
     clear_refresh_cookie(response, settings)
 

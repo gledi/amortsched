@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 import uuid
 from decimal import Decimal
 
@@ -279,7 +280,8 @@ async def export_schedule_csv(
     handler: GetPlan,
 ) -> Response:
     plan = await handler.handle(GetPlanQuery(plan_id=plan_id, user_id=user_id))
-    filename = f"{plan.slug or 'plan'}-schedule.csv"
+    safe_slug = re.sub(r"[^a-z0-9_]+", "-", plan.slug.lower()).strip("-") or "plan"
+    filename = f"{safe_slug[:80]}-schedule.csv"
     return Response(
         content=schedule_csv(plan),
         media_type="text/csv; charset=utf-8",
