@@ -1,5 +1,3 @@
-const REFRESH_TOKEN_KEY = "refresh_token";
-
 let accessToken: string | null = null;
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -7,41 +5,26 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
-export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+export function setAccessToken(token: string): void {
+  accessToken = token;
 }
 
-export function setTokens(access: string, refresh: string): void {
-  accessToken = access;
-  localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
-}
-
-export function clearTokens(): void {
+export function clearAccessToken(): void {
   accessToken = null;
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 async function performRefresh(): Promise<boolean> {
-  const refresh = getRefreshToken();
-  if (!refresh) return false;
-
   try {
-    const res = await fetch("/api/auth/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refresh }),
-    });
-
+    const res = await fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" });
     if (!res.ok) {
-      clearTokens();
+      accessToken = null;
       return false;
     }
-
-    const data = await res.json();
-    setTokens(data.access_token, data.refresh_token);
+    const data: { access_token: string } = await res.json();
+    accessToken = data.access_token;
     return true;
   } catch {
-    clearTokens();
+    accessToken = null;
     return false;
   }
 }
@@ -53,4 +36,22 @@ export function silentRefresh(): Promise<boolean> {
     refreshPromise = null;
   });
   return refreshPromise;
+}
+
+export async function ensureSession(): Promise<boolean> {
+  if (accessToken) return true;
+  return silentRefresh();
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+  } finally {
+    accessToken = null;
+  }
+}
+
+export function safeRedirectTarget(target: string | undefined): string {
+  if (!target || !target.startsWith("/") || target.startsWith("//")) return "/";
+  return target;
 }

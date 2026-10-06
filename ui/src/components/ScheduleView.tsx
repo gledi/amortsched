@@ -1,47 +1,33 @@
-import * as React from "react";
-import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import {
+  AlertTriangleIcon,
+  BookmarkCheckIcon,
+  CheckCircle2Icon,
+  ClockIcon,
+  DollarSignIcon,
+  HomeIcon,
+  LayersIcon,
+  PercentIcon,
+  ShieldIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableFooter,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  formatCurrency,
-  formatMonthsToYears,
-  formatDate,
-} from "@/lib/formatters";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getDisplayLocale } from "@/lib/currency";
+import { formatCurrency, formatMonthsToYears } from "@/lib/formatters";
 import { plansApi } from "@/lib/plans-api";
-import type { Schedule } from "@/lib/types";
-import {
-  DownloadIcon,
-  BookmarkCheckIcon,
-  Trash2Icon,
-  CheckCircle2Icon,
-  AlertTriangleIcon,
-  DollarSignIcon,
-  PercentIcon,
-  ClockIcon,
-  LayersIcon,
-} from "lucide-react";
+import type { Installment, Schedule } from "@/lib/types";
 
 interface ScheduleViewProps {
   planId: string;
+  currency: string;
   schedules: Schedule[];
   activeScheduleId: string | null;
   onSelectSchedule: (scheduleId: string) => void;
@@ -49,8 +35,46 @@ interface ScheduleViewProps {
   onScheduleSaved: (updatedSchedule: Schedule) => void;
 }
 
+function matchesSearch(inst: Installment, term: string): boolean {
+  const needle = term.toLowerCase();
+  return (
+    inst.month_name.toLowerCase().includes(needle) ||
+    String(inst.year).includes(needle) ||
+    inst.type.toLowerCase().includes(needle) ||
+    (inst.installment_number !== null && String(inst.installment_number).includes(needle))
+  );
+}
+
+function TypeBadge({ type }: { type: string }) {
+  if (type === "recurring_extra") return <Badge variant="secondary">Recurring extra</Badge>;
+  if (type === "one_time_extra") return <Badge variant="outline">Extra payment</Badge>;
+  return <span className="text-xs text-muted-foreground">Regular</span>;
+}
+
+interface KpiProps {
+  label: string;
+  value: React.ReactNode;
+  icon?: React.ReactNode;
+  tone?: string;
+}
+
+function Kpi({ label, value, icon, tone = "" }: KpiProps) {
+  return (
+    <Card size="sm">
+      <CardHeader className="pb-1">
+        <CardDescription className="flex items-center gap-1">
+          {icon}
+          {label}
+        </CardDescription>
+        <CardTitle className={`text-base font-bold ${tone}`}>{value}</CardTitle>
+      </CardHeader>
+    </Card>
+  );
+}
+
 export function ScheduleView({
   planId,
+  currency,
   schedules,
   activeScheduleId,
   onSelectSchedule,
@@ -59,49 +83,40 @@ export function ScheduleView({
 }: ScheduleViewProps) {
   const [filterYear, setFilterYear] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const money = (value: string | number | null | undefined) => formatCurrency(value, currency);
 
-  const activeSchedule = useMemo(() => {
-    if (!activeScheduleId && schedules.length > 0) return schedules[0];
-    return schedules.find((s) => s.id === activeScheduleId) || schedules[0] || null;
-  }, [schedules, activeScheduleId]);
+  const activeSchedule = useMemo(
+    () => schedules.find((s) => s.id === activeScheduleId) ?? schedules[0] ?? null,
+    [schedules, activeScheduleId],
+  );
 
-  // Extract unique years from installments
   const availableYears = useMemo(() => {
     if (!activeSchedule) return [];
-    const years = new Set<number>();
-    activeSchedule.installments.forEach((inst) => years.add(inst.year));
-    return Array.from(years).sort((a, b) => a - b);
+    return Array.from(new Set(activeSchedule.installments.map((inst) => inst.year))).sort((a, b) => a - b);
   }, [activeSchedule]);
 
-  // Filtered installments
   const filteredInstallments = useMemo(() => {
     if (!activeSchedule) return [];
     return activeSchedule.installments.filter((inst) => {
-      if (filterYear !== "all" && inst.year !== parseInt(filterYear, 10)) {
-        return false;
-      }
-      if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase();
-        const matchesMonth = inst.month_name.toLowerCase().includes(term);
-        const matchesYear = String(inst.year).includes(term);
-        const matchesType = inst.type.toLowerCase().includes(term);
-        const matchesNum = inst.installment_number !== null && String(inst.installment_number).includes(term);
-        return matchesMonth || matchesYear || matchesType || matchesNum;
-      }
-      return true;
+      if (filterYear !== "all" && inst.year !== parseInt(filterYear, 10)) return false;
+      return searchTerm.trim() ? matchesSearch(inst, searchTerm.trim()) : true;
     });
   }, [activeSchedule, filterYear, searchTerm]);
+
+  const save = useMutation({
+    mutationFn: () => plansApi.saveSchedule(planId, activeSchedule!.id),
+    onSuccess: onScheduleSaved,
+  });
 
   if (!activeSchedule) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-          <LayersIcon className="size-10 text-muted-foreground/50 mb-3" />
-          <h3 className="text-sm font-semibold">No Schedule Generated Yet</h3>
-          <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-            Generate an amortization schedule to inspect your monthly payment schedule, principal reduction, and interest breakdown.
+          <LayersIcon className="mb-3 size-10 text-muted-foreground/50" />
+          <h3 className="text-sm font-semibold">No schedule yet</h3>
+          <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+            Generate a schedule to see every payment, how much goes to principal and interest, and when the loan is paid
+            off.
           </p>
         </CardContent>
       </Card>
@@ -109,235 +124,135 @@ export function ScheduleView({
   }
 
   const totals = activeSchedule.totals;
-
-  function exportToCsv() {
-    if (!activeSchedule) return;
-    const headers = [
-      "Installment",
-      "Year",
-      "Month",
-      "Payment Type",
-      "Principal ($)",
-      "Interest ($)",
-      "Fees ($)",
-      "Total Payment ($)",
-      "Balance Before ($)",
-      "Balance After ($)",
-    ];
-
-    const rows = activeSchedule.installments.map((inst) => [
-      inst.installment_number ?? "",
-      inst.year,
-      inst.month_name,
-      inst.type,
-      inst.principal,
-      inst.interest,
-      inst.fees,
-      inst.total,
-      inst.balance.before,
-      inst.balance.after,
-    ]);
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute(
-      "download",
-      `amortization_schedule_${planId.slice(0, 8)}_${new Date(activeSchedule.generated_at).toISOString().split("T")[0]}.csv`
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  async function handleSaveSchedule() {
-    if (!activeSchedule) return;
-    setSaving(true);
-    try {
-      const saved = await plansApi.saveSchedule(planId, activeSchedule.id);
-      onScheduleSaved(saved);
-    } catch (err: any) {
-      alert(err?.message || "Failed to save schedule");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteSchedule() {
-    if (!activeSchedule) return;
-    if (!confirm("Are you sure you want to delete this generated schedule?")) return;
-    setDeleting(true);
-    try {
-      await plansApi.deleteSchedule(planId, activeSchedule.id);
-      onScheduleDeleted(activeSchedule.id);
-    } catch (err: any) {
-      alert(err?.message || "Failed to delete schedule");
-    } finally {
-      setDeleting(false);
-    }
-  }
+  const showHousing = activeSchedule.installments.some((inst) => inst.housing !== null);
+  const hasPmi = totals !== null && Number(totals.pmi) > 0;
+  const timeFormat = new Intl.DateTimeFormat(getDisplayLocale(), { dateStyle: "medium", timeStyle: "short" });
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Schedule selector and Top Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center print:hidden">
         <div className="flex items-center gap-3">
-          {schedules.length > 1 && (
+          {schedules.length > 1 ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Schedule:</span>
+              <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">Run:</span>
               <Select value={activeSchedule.id} onValueChange={(val) => val && onSelectSchedule(val)}>
-                <SelectTrigger className="w-56">
-                  <SelectValue />
+                <SelectTrigger className="w-60">
+                  <SelectValue>{timeFormat.format(new Date(activeSchedule.generated_at))}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     {schedules.map((s, idx) => (
                       <SelectItem key={s.id} value={s.id}>
-                        Run #{schedules.length - idx} ({new Date(s.generated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                        #{schedules.length - idx} · {timeFormat.format(new Date(s.generated_at))}
                       </SelectItem>
                     ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Generated {timeFormat.format(new Date(activeSchedule.generated_at))}
+            </span>
           )}
-          <span className="text-xs text-muted-foreground">
-            Generated {new Date(activeSchedule.generated_at).toLocaleString()}
-          </span>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={exportToCsv}>
-            <DownloadIcon data-icon="inline-start" />
-            Export CSV
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSaveSchedule}
-            disabled={saving}
-          >
+          <Button variant="outline" size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
             <BookmarkCheckIcon data-icon="inline-start" />
-            {saving ? "Saving..." : "Lock / Save"}
+            {save.isPending ? "Saving..." : "Keep this run"}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDeleteSchedule}
-            disabled={deleting}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2Icon data-icon="inline-start" />
-            Delete
-          </Button>
+          <ConfirmDialog
+            title="Delete this schedule run?"
+            description="The plan stays as it is. You can generate a new schedule at any time."
+            confirmLabel="Delete run"
+            onConfirm={async () => {
+              await plansApi.deleteSchedule(planId, activeSchedule.id);
+              onScheduleDeleted(activeSchedule.id);
+            }}
+            trigger={
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                <Trash2Icon data-icon="inline-start" />
+                Delete
+              </Button>
+            }
+          />
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
-      {totals && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Card size="sm">
-            <CardHeader className="pb-1">
-              <CardDescription className="flex items-center gap-1">
-                <DollarSignIcon className="size-3" />
-                Total Outflow
-              </CardDescription>
-              <CardTitle className="text-base font-bold text-foreground">
-                {formatCurrency(totals.total_outflow)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
+      {save.isError ? (
+        <Alert variant="destructive">
+          <AlertDescription>{save.error.message}</AlertDescription>
+        </Alert>
+      ) : null}
 
+      {totals ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <Kpi
+            label="Total paid to lender"
+            icon={<DollarSignIcon className="size-3" />}
+            value={money(totals.total_outflow)}
+          />
+          <Kpi
+            label="Total interest"
+            icon={<PercentIcon className="size-3" />}
+            value={money(totals.interest)}
+            tone="text-destructive"
+          />
+          {hasPmi ? (
+            <Kpi label="Total PMI" icon={<ShieldIcon className="size-3" />} value={money(totals.pmi)} />
+          ) : (
+            <Kpi label="Fees paid" value={money(totals.fees)} />
+          )}
+          {showHousing ? (
+            <Kpi label="Tax, insurance & HOA" icon={<HomeIcon className="size-3" />} value={money(totals.escrow)} />
+          ) : (
+            <Kpi label="Principal paid" value={money(totals.principal)} tone="text-primary" />
+          )}
+          <Kpi label="Duration" icon={<ClockIcon className="size-3" />} value={formatMonthsToYears(totals.months)} />
           <Card size="sm">
             <CardHeader className="pb-1">
-              <CardDescription className="flex items-center gap-1">
-                <PercentIcon className="size-3" />
-                Total Interest
-              </CardDescription>
-              <CardTitle className="text-base font-bold text-destructive">
-                {formatCurrency(totals.interest)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card size="sm">
-            <CardHeader className="pb-1">
-              <CardDescription>Principal Paid</CardDescription>
-              <CardTitle className="text-base font-bold text-primary">
-                {formatCurrency(totals.principal)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card size="sm">
-            <CardHeader className="pb-1">
-              <CardDescription>Fees Paid</CardDescription>
-              <CardTitle className="text-base font-bold">
-                {formatCurrency(totals.fees)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card size="sm">
-            <CardHeader className="pb-1">
-              <CardDescription className="flex items-center gap-1">
-                <ClockIcon className="size-3" />
-                Duration
-              </CardDescription>
-              <CardTitle className="text-base font-bold">
-                {formatMonthsToYears(totals.months)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card size="sm">
-            <CardHeader className="pb-1">
-              <CardDescription>Payoff Status</CardDescription>
+              <CardDescription>Payoff</CardDescription>
               <div className="mt-1">
                 {totals.paid_off ? (
-                  <Badge variant="default" className="gap-1 bg-emerald-600 hover:bg-emerald-600">
+                  <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-600">
                     <CheckCircle2Icon className="size-3" />
-                    Fully Paid Off
+                    Paid off
                   </Badge>
                 ) : (
                   <Badge variant="destructive" className="gap-1">
                     <AlertTriangleIcon className="size-3" />
-                    Unpaid Balance
+                    Balance remains
                   </Badge>
                 )}
               </div>
             </CardHeader>
           </Card>
         </div>
-      )}
+      ) : null}
 
-      {/* Installments Table Card */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <CardTitle>Installment Schedule</CardTitle>
+              <CardTitle>Payments</CardTitle>
               <CardDescription>
-                Showing {filteredInstallments.length} installment{filteredInstallments.length === 1 ? "" : "s"}
-                {filterYear !== "all" ? ` for Year ${filterYear}` : ""}
+                {filteredInstallments.length} payment{filteredInstallments.length === 1 ? "" : "s"}
+                {filterYear !== "all" ? ` in ${filterYear}` : ""}
               </CardDescription>
             </div>
 
-            <div className="flex items-center gap-3">
-              {availableYears.length > 1 && (
+            <div className="flex items-center gap-3 print:hidden">
+              {availableYears.length > 1 ? (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">Year:</span>
+                  <span className="whitespace-nowrap text-xs text-muted-foreground">Year:</span>
                   <Select value={filterYear} onValueChange={(v) => v && setFilterYear(v)}>
                     <SelectTrigger className="w-28">
-                      <SelectValue />
+                      <SelectValue>{filterYear === "all" ? "All years" : filterYear}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectItem value="all">All Years</SelectItem>
+                        <SelectItem value="all">All years</SelectItem>
                         {availableYears.map((yr) => (
                           <SelectItem key={yr} value={String(yr)}>
                             {yr}
@@ -347,10 +262,10 @@ export function ScheduleView({
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-
+              ) : null}
               <Input
-                placeholder="Filter installments..."
+                placeholder="Filter payments..."
+                aria-label="Filter payments"
                 className="w-44 sm:w-56"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -360,90 +275,90 @@ export function ScheduleView({
         </CardHeader>
 
         <CardContent className="p-0">
-          <div className="max-h-[600px] overflow-auto border-t border-border">
+          <div className="max-h-[600px] overflow-auto border-t border-border print:max-h-none print:overflow-visible">
             <Table>
-              <TableHeader className="sticky top-0 bg-card z-10 shadow-xs">
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-xs">
                 <TableRow>
                   <TableHead className="w-12 text-center">#</TableHead>
                   <TableHead>Period</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Payment</TableHead>
+                  <TableHead className="text-right">Loan payment</TableHead>
                   <TableHead className="text-right">Principal</TableHead>
                   <TableHead className="text-right">Interest</TableHead>
                   <TableHead className="text-right">Fees</TableHead>
-                  <TableHead className="text-right">Ending Balance</TableHead>
+                  {showHousing ? <TableHead className="text-right">Tax, ins. & HOA</TableHead> : null}
+                  {hasPmi ? <TableHead className="text-right">PMI</TableHead> : null}
+                  {showHousing ? <TableHead className="text-right">Total monthly</TableHead> : null}
+                  <TableHead className="text-right">Balance</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInstallments.map((inst, index) => {
-                  const isExtra =
-                    inst.type.toLowerCase().includes("extra") ||
-                    inst.type.toLowerCase().includes("one_time");
-                  const isRecurring = inst.type.toLowerCase().includes("recurring");
-
-                  return (
-                    <TableRow
-                      key={`${inst.year}-${inst.month}-${inst.installment_number}-${index}`}
-                      className={isExtra ? "bg-muted/30" : undefined}
-                    >
-                      <TableCell className="text-center font-mono text-muted-foreground">
-                        {inst.installment_number ?? "—"}
-                      </TableCell>
-                      <TableCell className="font-medium whitespace-nowrap">
-                        {inst.month_name} {inst.year}
-                      </TableCell>
-                      <TableCell>
-                        {isRecurring ? (
-                          <Badge variant="secondary">Recurring Extra</Badge>
-                        ) : isExtra ? (
-                          <Badge variant="outline">Extra Payment</Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Regular</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-medium">
-                        {formatCurrency(inst.total)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-primary">
-                        {formatCurrency(inst.principal)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-destructive">
-                        {formatCurrency(inst.interest)}
-                      </TableCell>
+                {filteredInstallments.map((inst, index) => (
+                  <TableRow
+                    key={`${inst.year}-${inst.month}-${inst.installment_number}-${index}`}
+                    className={inst.installment_number === null ? "bg-muted/30" : undefined}
+                  >
+                    <TableCell className="text-center font-mono text-muted-foreground">
+                      {inst.installment_number ?? "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-medium">
+                      {inst.month_name} {inst.year}
+                    </TableCell>
+                    <TableCell>
+                      <TypeBadge type={inst.type} />
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-medium">{money(inst.total)}</TableCell>
+                    <TableCell className="text-right font-mono text-primary">{money(inst.principal)}</TableCell>
+                    <TableCell className="text-right font-mono text-destructive">{money(inst.interest)}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      {Number(inst.fees) > 0 ? money(inst.fees) : "—"}
+                    </TableCell>
+                    {showHousing ? (
                       <TableCell className="text-right font-mono text-muted-foreground">
-                        {parseFloat(String(inst.fees)) > 0
-                          ? formatCurrency(inst.fees)
+                        {inst.housing
+                          ? money(
+                              Number(inst.housing.property_tax) +
+                                Number(inst.housing.insurance) +
+                                Number(inst.housing.hoa),
+                            )
                           : "—"}
                       </TableCell>
-                      <TableCell className="text-right font-mono font-semibold">
-                        {formatCurrency(inst.balance.after)}
+                    ) : null}
+                    {hasPmi ? (
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {inst.housing && Number(inst.housing.pmi) > 0 ? money(inst.housing.pmi) : "—"}
                       </TableCell>
-                    </TableRow>
-                  );
-                })}
+                    ) : null}
+                    {showHousing ? (
+                      <TableCell className="text-right font-mono font-semibold">
+                        {money(inst.total_with_housing)}
+                      </TableCell>
+                    ) : null}
+                    <TableCell className="text-right font-mono font-semibold">{money(inst.balance.after)}</TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
-              {totals && filterYear === "all" && !searchTerm && (
-                <TableFooter className="sticky bottom-0 bg-muted/80 backdrop-blur-xs font-semibold">
+              {totals && filterYear === "all" && !searchTerm ? (
+                <TableFooter className="sticky bottom-0 bg-muted/80 font-semibold backdrop-blur-xs">
                   <TableRow>
                     <TableCell colSpan={3}>Totals</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(totals.total_outflow)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-primary">
-                      {formatCurrency(totals.principal)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-destructive">
-                      {formatCurrency(totals.interest)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(totals.fees)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      $0.00
-                    </TableCell>
+                    <TableCell className="text-right font-mono">{money(totals.total_outflow)}</TableCell>
+                    <TableCell className="text-right font-mono text-primary">{money(totals.principal)}</TableCell>
+                    <TableCell className="text-right font-mono text-destructive">{money(totals.interest)}</TableCell>
+                    <TableCell className="text-right font-mono">{money(totals.fees)}</TableCell>
+                    {showHousing ? (
+                      <TableCell className="text-right font-mono">{money(totals.escrow)}</TableCell>
+                    ) : null}
+                    {hasPmi ? <TableCell className="text-right font-mono">{money(totals.pmi)}</TableCell> : null}
+                    {showHousing ? (
+                      <TableCell className="text-right font-mono">
+                        {money(Number(totals.total_outflow) + Number(totals.escrow) + Number(totals.pmi))}
+                      </TableCell>
+                    ) : null}
+                    <TableCell className="text-right font-mono">{money(0)}</TableCell>
                   </TableRow>
                 </TableFooter>
-              )}
+              ) : null}
             </Table>
           </div>
         </CardContent>

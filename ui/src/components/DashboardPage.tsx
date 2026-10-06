@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CreatePlanDialog } from "@/components/CreatePlanDialog";
 import { PlanSelectionBar } from "@/components/PlanSelectionBar";
 import { formatCurrency, formatPercent, formatTerm, formatDate } from "@/lib/formatters";
+import { loanTypeLabel } from "@/lib/plan-form";
 import type { Plan } from "@/lib/types";
 import { isComparableSelection, restorePlanSelection, togglePlanSelection } from "@/lib/plan-selection";
 import {
@@ -22,7 +24,22 @@ import {
   ClockIcon,
   TrendingUpIcon,
   PercentIcon,
+  WalletIcon,
 } from "lucide-react";
+
+export function principalByCurrency(plans: Plan[]): string {
+  const totals = new Map<string, number>();
+  for (const plan of plans) {
+    const amount = Number(plan.amount);
+    if (Number.isFinite(amount)) totals.set(plan.currency, (totals.get(plan.currency) ?? 0) + amount);
+  }
+  if (totals.size === 0) return formatCurrency(0);
+  return [...totals.entries()].map(([currency, total]) => formatCurrency(total, currency)).join(" · ");
+}
+
+function monthlyTotal(plan: Plan): number {
+  return Number(plan.monthly_payment) + (plan.monthly_housing ? Number(plan.monthly_housing.total) : 0);
+}
 
 const route = getRouteApi("/_app/");
 
@@ -49,9 +66,6 @@ export function DashboardPage() {
     mutationFn: plansApi.deletePlan,
     onSuccess: (_, planId) => {
       queryClient.setQueryData<Plan[]>(["plans"], (prev = []) => prev.filter((p) => p.id !== planId));
-    },
-    onError: (err: Error) => {
-      alert(err.message || "Failed to delete plan");
     },
   });
 
@@ -85,10 +99,6 @@ export function DashboardPage() {
 
   const savedCount = plans.filter((p) => p.status === "saved").length;
   const draftCount = plans.filter((p) => p.status === "draft").length;
-  const totalPrincipal = plans.reduce((acc, p) => {
-    const amt = typeof p.amount === "number" ? p.amount : parseFloat(p.amount);
-    return acc + (isNaN(amt) ? 0 : amt);
-  }, 0);
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-8">
@@ -97,7 +107,7 @@ export function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Loan Plans</h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Model fixed-rate loans, prepayments, and interest rate changes with exact amortization schedules.
+            Every offer you&apos;re weighing, with its true monthly cost. Select two to four to compare them.
           </p>
         </div>
         {selectionMode ? null : (
@@ -146,9 +156,9 @@ export function DashboardPage() {
           <CardHeader className="pb-1">
             <CardDescription className="flex items-center gap-1">
               <DollarSignIcon className="size-3" />
-              Total Portfolio Principal
+              Total principal
             </CardDescription>
-            <CardTitle className="text-xl font-bold text-primary">{formatCurrency(totalPrincipal)}</CardTitle>
+            <CardTitle className="text-xl font-bold text-primary">{principalByCurrency(plans)}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -166,8 +176,8 @@ export function DashboardPage() {
             </div>
             <h3 className="text-base font-semibold">No Loan Plans Yet</h3>
             <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-              Get started by creating a loan plan. You can specify term lengths, interest rates, extra payments, and
-              calculate full amortization schedules.
+              Add a mortgage or loan offer to see its monthly cost, full payment schedule, and what extra payments or a
+              refinance would save you.
             </p>
             <div className="mt-6">
               <CreatePlanDialog onPlanCreated={handlePlanCreated} />
@@ -215,7 +225,9 @@ export function DashboardPage() {
                         )}
                       </CardTitle>
                       {plan.lender ? <CardDescription>{plan.name}</CardDescription> : null}
-                      <CardDescription className="mt-0.5 font-mono text-[11px]">{plan.slug}</CardDescription>
+                      <CardDescription className="mt-0.5 text-[11px]">
+                        {loanTypeLabel(plan.loan_type)} · {plan.currency}
+                      </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
                       {selectionMode ? (
@@ -233,8 +245,16 @@ export function DashboardPage() {
 
                 <CardContent className="flex flex-col gap-3">
                   <div className="flex items-baseline justify-between border-b border-border/50 pb-2">
-                    <span className="text-xs text-muted-foreground">Loan Amount:</span>
-                    <span className="font-mono text-lg font-bold text-primary">{formatCurrency(plan.amount)}</span>
+                    <span className="text-xs text-muted-foreground">Loan amount</span>
+                    <span className="font-mono text-lg font-bold text-primary">
+                      {formatCurrency(plan.amount, plan.currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <WalletIcon className="size-3" /> Monthly
+                    </span>
+                    <span className="font-mono font-semibold">{formatCurrency(monthlyTotal(plan), plan.currency)}</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -272,23 +292,22 @@ export function DashboardPage() {
 
                 {selectionMode ? null : (
                   <CardFooter className="flex items-center justify-between border-t border-border pt-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive px-2"
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to delete "${plan.name}"?`)) {
-                          deleteMutation.mutate(plan.id);
-                        }
-                      }}
-                    >
-                      <Trash2Icon data-icon="inline-start" />
-                      Delete
-                    </Button>
+                    <ConfirmDialog
+                      title={`Delete "${plan.name}"?`}
+                      description="The plan and all of its schedules are removed. This cannot be undone."
+                      confirmLabel="Delete plan"
+                      onConfirm={() => deleteMutation.mutateAsync(plan.id)}
+                      trigger={
+                        <Button variant="ghost" size="sm" className="px-2 text-destructive hover:text-destructive">
+                          <Trash2Icon data-icon="inline-start" />
+                          Delete
+                        </Button>
+                      }
+                    />
 
                     <Link to="/plans/$planId" params={{ planId: plan.id }}>
                       <Button size="sm">
-                        View Schedule
+                        Open
                         <ArrowRightIcon data-icon="inline-end" />
                       </Button>
                     </Link>

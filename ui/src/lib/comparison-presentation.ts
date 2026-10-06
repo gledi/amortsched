@@ -1,5 +1,45 @@
-import { formatCurrency } from "./formatters";
-import type { PlanComparison } from "./types";
+import { formatCurrency, formatMonths } from "./formatters";
+import type { PlanComparison, PlanComparisonItem } from "./types";
+
+export const SERIES_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)"] as const;
+
+export function offerLabel(plan: Pick<PlanComparisonItem, "lender" | "name">): string {
+  return plan.lender || plan.name;
+}
+
+export function chartLabel(plan: Pick<PlanComparisonItem, "lender" | "name">): string {
+  return plan.lender ? `${plan.lender} — ${plan.name}` : plan.name;
+}
+
+export function comparisonCurrency(comparison: PlanComparison): string | null {
+  const currencies = new Set(comparison.plans.map((plan) => plan.currency));
+  return currencies.size === 1 ? comparison.plans[0].currency : null;
+}
+
+export function horizonHeadline(comparison: PlanComparison): string | null {
+  if (comparison.horizon_months === null || comparison.horizon_winner_plan_ids.length === 0) return null;
+  const period = formatMonths(comparison.horizon_months);
+  const winners = comparison.plans.filter((plan) => comparison.horizon_winner_plan_ids.includes(plan.id));
+  if (winners.length > 1) return `If you sell or refinance after ${period}, ${winners.length} offers cost the same.`;
+  const winner = winners[0];
+  const others = comparison.plans.filter((plan) => plan.id !== winner.id && plan.horizon !== null);
+  const nextCost = Math.min(...others.map((plan) => Number(plan.horizon?.cost)));
+  const saving = Number.isFinite(nextCost) ? nextCost - Number(winner.horizon?.cost) : null;
+  const savingText = saving !== null && saving > 0 ? `, saving ${formatCurrency(saving, winner.currency)}` : "";
+  return `If you sell or refinance after ${period}, ${offerLabel(winner)} costs least${savingText}.`;
+}
+
+/** First month after which `a` stays cheaper than `b` for good, or null if the lead never changes. */
+export function crossoverMonth(a: PlanComparisonItem, b: PlanComparisonItem): number | null {
+  const length = Math.max(a.cumulative_cost.length, b.cumulative_cost.length);
+  const at = (series: (string | number)[], index: number) => Number(series[Math.min(index, series.length - 1)]);
+  const leadAtStart = Math.sign(at(a.cumulative_cost, 0) - at(b.cumulative_cost, 0));
+  for (let month = 1; month < length; month += 1) {
+    const lead = Math.sign(at(a.cumulative_cost, month) - at(b.cumulative_cost, month));
+    if (lead !== 0 && lead !== leadAtStart) return month;
+  }
+  return null;
+}
 
 export function comparisonHeadline(comparison: PlanComparison): {
   title: string;
@@ -37,7 +77,7 @@ export function comparisonHeadline(comparison: PlanComparison): {
     description:
       comparison.savings_vs_next_best === null
         ? "Review the payment, fees, and payoff timing to choose the offer that fits you."
-        : `Saves ${formatCurrency(comparison.savings_vs_next_best)} versus the next-lowest offer.`,
+        : `Saves ${formatCurrency(comparison.savings_vs_next_best, winner.currency)} versus the next-lowest offer, including fees and PMI.`,
     variant: "default",
   };
 }

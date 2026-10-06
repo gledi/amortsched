@@ -1,39 +1,117 @@
-import * as React from "react";
 import { useState } from "react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { plansApi } from "@/lib/plans-api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ScheduleView } from "@/components/ScheduleView";
-import { AdjustmentsView } from "@/components/AdjustmentsView";
-import { EditPlanDialog } from "@/components/EditPlanDialog";
-import {
-  formatCurrency,
-  formatPercent,
-  formatTerm,
-  formatDate,
-} from "@/lib/formatters";
-import type { Plan, Schedule } from "@/lib/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
-  PlayIcon,
   BookmarkCheckIcon,
-  Trash2Icon,
-  CalendarIcon,
-  DollarSignIcon,
-  PercentIcon,
-  ClockIcon,
-  CheckIcon,
+  CopyIcon,
+  DownloadIcon,
   LayersIcon,
+  LineChartIcon,
+  PiggyBankIcon,
+  PlayIcon,
+  PrinterIcon,
+  RefreshCwIcon,
   SlidersHorizontalIcon,
+  Trash2Icon,
 } from "lucide-react";
+import { AdjustmentsView } from "@/components/AdjustmentsView";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EditPlanDialog } from "@/components/EditPlanDialog";
+import { ScheduleView } from "@/components/ScheduleView";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatCurrency, formatDate, formatPercent, formatTerm } from "@/lib/formatters";
+import { loanTypeLabel } from "@/lib/plan-form";
+import { plansApi } from "@/lib/plans-api";
+import type { Plan, Schedule } from "@/lib/types";
 
 export const Route = createFileRoute("/_app/plans/$planId")({
   component: PlanDetailPage,
 });
+
+interface StatProps {
+  label: string;
+  value: React.ReactNode;
+  detail?: React.ReactNode;
+  emphasis?: boolean;
+}
+
+function Stat({ label, value, detail, emphasis }: StatProps) {
+  return (
+    <Card size="sm">
+      <CardHeader className="pb-1">
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className={emphasis ? "text-base font-bold text-primary" : "text-base font-bold"}>{value}</CardTitle>
+        {detail ? <p className="text-[11px] text-muted-foreground">{detail}</p> : null}
+      </CardHeader>
+    </Card>
+  );
+}
+
+function PlanOverview({ plan }: { plan: Plan }) {
+  const money = (value: string | number | null | undefined) => formatCurrency(value, plan.currency);
+  const housing = plan.monthly_housing;
+  const firstChange = [...plan.interest_rate_changes].sort((a, b) =>
+    a.effective_date.localeCompare(b.effective_date),
+  )[0];
+  const totalMonthly = Number(plan.monthly_payment) + (housing ? Number(housing.total) : 0);
+  const earlyFees = plan.early_payment_fees;
+  const hasEarlyFee = Number(earlyFees.fixed) > 0 || Number(earlyFees.percent) > 0;
+
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <Stat
+        label="Loan amount"
+        value={money(plan.amount)}
+        emphasis
+        detail={
+          plan.down_payment !== null ? `${money(plan.down_payment)} down · ${formatPercent(plan.ltv)} LTV` : undefined
+        }
+      />
+      <Stat
+        label="Interest rate"
+        value={formatPercent(plan.interest_rate)}
+        detail={
+          firstChange
+            ? `→ ${formatPercent(firstChange.rate)} from ${formatDate(firstChange.effective_date)}`
+            : "Fixed for the full term"
+        }
+      />
+      <Stat label="Term" value={formatTerm(plan.term)} detail={`First payment ${formatDate(plan.start_date)}`} />
+      <Stat label="Loan payment" value={money(plan.monthly_payment)} detail="Principal & interest / month" />
+      <Stat
+        label="Total monthly"
+        value={money(totalMonthly)}
+        detail={
+          housing
+            ? [
+                Number(housing.property_tax) > 0 ? `tax ${money(housing.property_tax)}` : null,
+                Number(housing.insurance) > 0 ? `ins. ${money(housing.insurance)}` : null,
+                Number(housing.hoa) > 0 ? `HOA ${money(housing.hoa)}` : null,
+                Number(housing.pmi) > 0 ? `PMI ${money(housing.pmi)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "No ownership costs"
+            : "No ownership costs"
+        }
+      />
+      <Stat
+        label="Fees"
+        value={money(plan.upfront_fees ?? 0)}
+        detail={
+          hasEarlyFee
+            ? `Prepayment: ${money(earlyFees.fixed)} + ${formatPercent(earlyFees.percent)}`
+            : "No prepayment penalty"
+        }
+      />
+    </div>
+  );
+}
 
 function PlanDetailPage() {
   const { planId } = Route.useParams();
@@ -42,29 +120,25 @@ function PlanDetailPage() {
 
   const [activeTab, setActiveTab] = useState<string>("schedule");
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  // Fetch plan details
   const {
     data: plan,
-    isLoading: isPlanLoading,
+    isLoading,
     error: planError,
   } = useQuery({
     queryKey: ["plan", planId],
     queryFn: () => plansApi.getPlan(planId),
   });
 
-  // Fetch schedules for plan
-  const {
-    data: schedules = [],
-    isLoading: isSchedulesLoading,
-    refetch: refetchSchedules,
-  } = useQuery({
+  const { data: schedules = [] } = useQuery({
     queryKey: ["schedules", planId],
     queryFn: () => plansApi.listSchedules(planId),
   });
 
-  // Generate schedule mutation
-  const generateMutation = useMutation({
+  const onError = (err: Error) => setActionError(err.message);
+
+  const generate = useMutation({
     mutationFn: () => plansApi.generateSchedule(planId),
     onSuccess: (newSchedule) => {
       queryClient.setQueryData<Schedule[]>(["schedules", planId], (prev = []) => [
@@ -74,53 +148,47 @@ function PlanDetailPage() {
       setActiveScheduleId(newSchedule.id);
       setActiveTab("schedule");
     },
-    onError: (err: any) => {
-      alert(err?.message || "Failed to generate amortization schedule");
-    },
+    onError,
   });
 
-  // Save plan mutation
-  const savePlanMutation = useMutation({
+  const savePlan = useMutation({
     mutationFn: () => plansApi.savePlan(planId),
     onSuccess: (updatedPlan) => {
       queryClient.setQueryData(["plan", planId], updatedPlan);
-      queryClient.invalidateQueries({ queryKey: ["plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["plans"] });
     },
-    onError: (err: any) => {
-      alert(err?.message || "Failed to promote plan to saved");
-    },
+    onError,
   });
 
-  // Delete plan mutation
-  const deletePlanMutation = useMutation({
-    mutationFn: () => plansApi.deletePlan(planId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["plans"] });
-      router.navigate({ to: "/" });
+  const duplicate = useMutation({
+    mutationFn: () => plansApi.duplicatePlan(planId),
+    onSuccess: (copy) => {
+      void queryClient.invalidateQueries({ queryKey: ["plans"] });
+      router.navigate({ to: "/plans/$planId", params: { planId: copy.id } });
     },
-    onError: (err: any) => {
-      alert(err?.message || "Failed to delete plan");
-    },
+    onError,
   });
 
-  if (isPlanLoading) {
+  const exportCsv = useMutation({ mutationFn: () => plansApi.exportScheduleCsv(planId), onError });
+
+  if (isLoading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-xs text-muted-foreground animate-pulse">Loading loan plan details...</p>
+      <div className="mx-auto flex max-w-7xl flex-col gap-6" role="status" aria-label="Loading plan">
+        <Skeleton className="h-12 w-1/2" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-96 w-full" />
       </div>
     );
   }
 
   if (planError || !plan) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
-        <p className="text-sm font-semibold text-destructive">Failed to load plan</p>
-        <p className="text-xs text-muted-foreground">The plan may not exist or has been removed.</p>
-        <Link to="/">
-          <Button variant="outline" size="sm">
-            <ArrowLeftIcon data-icon="inline-start" />
-            Back to Dashboard
-          </Button>
+      <div className="flex min-h-[400px] flex-col items-center justify-center gap-3">
+        <p className="text-sm font-semibold text-destructive">Couldn&apos;t load this plan</p>
+        <p className="text-xs text-muted-foreground">It may have been deleted.</p>
+        <Link to="/" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <ArrowLeftIcon data-icon="inline-start" />
+          Back to plans
         </Link>
       </div>
     );
@@ -128,190 +196,153 @@ function PlanDetailPage() {
 
   const isDraft = plan.status === "draft";
   const adjustmentsCount =
-    (plan.one_time_extra_payments?.length || 0) +
-    (plan.recurring_extra_payments?.length || 0) +
-    (plan.interest_rate_changes?.length || 0);
+    plan.one_time_extra_payments.length + plan.recurring_extra_payments.length + plan.interest_rate_changes.length;
 
   function handlePlanUpdated(updatedPlan: Plan) {
     queryClient.setQueryData(["plan", planId], updatedPlan);
-    queryClient.invalidateQueries({ queryKey: ["plans"] });
+    void queryClient.invalidateQueries({ queryKey: ["plans"] });
   }
 
   function handleScheduleDeleted(deletedId: string) {
-    queryClient.setQueryData<Schedule[]>(["schedules", planId], (prev = []) =>
-      prev.filter((s) => s.id !== deletedId)
-    );
-    if (activeScheduleId === deletedId) {
-      setActiveScheduleId(null);
-    }
+    queryClient.setQueryData<Schedule[]>(["schedules", planId], (prev = []) => prev.filter((s) => s.id !== deletedId));
+    if (activeScheduleId === deletedId) setActiveScheduleId(null);
   }
 
   function handleScheduleSaved(savedSchedule: Schedule) {
     queryClient.setQueryData<Schedule[]>(["schedules", planId], (prev = []) =>
-      prev.map((s) => (s.id === savedSchedule.id ? savedSchedule : s))
+      prev.map((s) => (s.id === savedSchedule.id ? savedSchedule : s)),
     );
   }
 
   return (
-    <div className="mx-auto max-w-7xl flex flex-col gap-6">
-      {/* Top Breadcrumb & Actions Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Link
-              to="/"
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-            >
-              <ArrowLeftIcon className="size-3" />
-              Plans
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-xs font-mono text-muted-foreground">{plan.slug}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{plan.name}</h1>
-            <Badge variant={isDraft ? "outline" : "default"}>
-              {isDraft ? "Draft" : "Saved"}
+          <Link
+            to="/"
+            search={{ compare: undefined }}
+            className="flex w-fit items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground print:hidden"
+          >
+            <ArrowLeftIcon className="size-3" />
+            Plans
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">{plan.lender || plan.name}</h1>
+            <Badge variant="secondary">{loanTypeLabel(plan.loan_type)}</Badge>
+            <Badge variant={isDraft ? "outline" : "default"}>{isDraft ? "Draft" : "Saved"}</Badge>
+            <Badge variant="outline" className="font-mono">
+              {plan.currency}
             </Badge>
           </div>
+          {plan.lender ? <p className="text-sm text-muted-foreground">{plan.name}</p> : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            onClick={() => generateMutation.mutate()}
-            disabled={generateMutation.isPending}
-          >
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending}>
             <PlayIcon data-icon="inline-start" />
-            {generateMutation.isPending ? "Calculating..." : "Generate Schedule"}
+            {generate.isPending ? "Calculating..." : "Generate schedule"}
           </Button>
-
-          {isDraft && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => savePlanMutation.mutate()}
-              disabled={savePlanMutation.isPending}
-            >
+          {isDraft ? (
+            <Button variant="outline" size="sm" onClick={() => savePlan.mutate()} disabled={savePlan.isPending}>
               <BookmarkCheckIcon data-icon="inline-start" />
-              {savePlanMutation.isPending ? "Saving..." : "Save Plan"}
+              {savePlan.isPending ? "Saving..." : "Mark as saved"}
             </Button>
-          )}
-
+          ) : null}
           <EditPlanDialog plan={plan} onPlanUpdated={handlePlanUpdated} />
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => {
-              if (confirm(`Are you sure you want to delete "${plan.name}"?`)) {
-                deletePlanMutation.mutate();
-              }
-            }}
-            disabled={deletePlanMutation.isPending}
-          >
-            <Trash2Icon data-icon="inline-start" />
-            Delete
+          <Button variant="outline" size="sm" onClick={() => duplicate.mutate()} disabled={duplicate.isPending}>
+            <CopyIcon data-icon="inline-start" />
+            Duplicate
           </Button>
+          <Button variant="outline" size="sm" onClick={() => exportCsv.mutate()} disabled={exportCsv.isPending}>
+            <DownloadIcon data-icon="inline-start" />
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => window.print()}>
+            <PrinterIcon data-icon="inline-start" />
+            Print
+          </Button>
+          <ConfirmDialog
+            title={`Delete "${plan.name}"?`}
+            description="The plan and all of its schedules are removed. This cannot be undone."
+            confirmLabel="Delete plan"
+            onConfirm={async () => {
+              await plansApi.deletePlan(planId);
+              queryClient.removeQueries({ queryKey: ["plan", planId] });
+              await queryClient.invalidateQueries({ queryKey: ["plans"] });
+              router.navigate({ to: "/" });
+            }}
+            trigger={
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                <Trash2Icon data-icon="inline-start" />
+                Delete
+              </Button>
+            }
+          />
         </div>
       </div>
 
-      {/* Plan Parameters Overview Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card size="sm">
-          <CardHeader className="pb-1">
-            <CardDescription className="flex items-center gap-1">
-              <DollarSignIcon className="size-3" />
-              Loan Amount
-            </CardDescription>
-            <CardTitle className="text-base font-bold text-primary">
-              {formatCurrency(plan.amount)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+      {actionError ? (
+        <Alert variant="destructive">
+          <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <Card size="sm">
-          <CardHeader className="pb-1">
-            <CardDescription className="flex items-center gap-1">
-              <PercentIcon className="size-3" />
-              Interest Rate
-            </CardDescription>
-            <CardTitle className="text-base font-bold">
-              {formatPercent(plan.interest_rate)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+      <PlanOverview plan={plan} />
 
-        <Card size="sm">
-          <CardHeader className="pb-1">
-            <CardDescription className="flex items-center gap-1">
-              <ClockIcon className="size-3" />
-              Term Length
-            </CardDescription>
-            <CardTitle className="text-base font-bold">
-              {formatTerm(plan.term)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card size="sm">
-          <CardHeader className="pb-1">
-            <CardDescription className="flex items-center gap-1">
-              <CalendarIcon className="size-3" />
-              Start Date
-            </CardDescription>
-            <CardTitle className="text-sm font-semibold">
-              {formatDate(plan.start_date)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card size="sm">
-          <CardHeader className="pb-1">
-            <CardDescription>Early Payoff Fees</CardDescription>
-            <CardTitle className="text-xs font-semibold truncate">
-              {formatCurrency(plan.early_payment_fees?.fixed ?? 0)} + {formatPercent(plan.early_payment_fees?.percent ?? 0)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card size="sm">
-          <CardHeader className="pb-1">
-            <CardDescription>Proration Rule</CardDescription>
-            <CardTitle className="text-xs font-semibold capitalize truncate">
-              {plan.interest_rate_application?.replace(/_/g, " ") || "Whole Month"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground print:hidden">
+        <LineChartIcon className="size-3.5" />
+        <span>Analyze this loan:</span>
+        <Link
+          to="/tools/refinance"
+          search={{ plan: plan.id }}
+          className={buttonVariants({ variant: "link", size: "xs", className: "px-0" })}
+        >
+          <RefreshCwIcon data-icon="inline-start" />
+          Should I refinance?
+        </Link>
+        <Link
+          to="/tools/prepay-vs-invest"
+          search={{ plan: plan.id }}
+          className={buttonVariants({ variant: "link", size: "xs", className: "px-0" })}
+        >
+          <PiggyBankIcon data-icon="inline-start" />
+          Prepay or invest?
+        </Link>
+        <Link
+          to="/"
+          search={{ compare: plan.id }}
+          className={buttonVariants({ variant: "link", size: "xs", className: "px-0" })}
+        >
+          Compare with other offers
+        </Link>
       </div>
 
-      {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={(val) => val && setActiveTab(val)}>
-        <TabsList>
+        <TabsList className="print:hidden">
           <TabsTrigger value="schedule" className="gap-2">
             <LayersIcon className="size-3.5" />
-            Amortization Schedule
-            {schedules.length > 0 && (
-              <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[10px]">
+            Schedule
+            {schedules.length > 0 ? (
+              <Badge variant="secondary" className="h-4 px-1.5 py-0 text-[10px]">
                 {schedules.length}
               </Badge>
-            )}
+            ) : null}
           </TabsTrigger>
           <TabsTrigger value="adjustments" className="gap-2">
             <SlidersHorizontalIcon className="size-3.5" />
-            Adjustments & Prepayments
-            {adjustmentsCount > 0 && (
-              <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[10px]">
+            Extra payments &amp; rate changes
+            {adjustmentsCount > 0 ? (
+              <Badge variant="secondary" className="h-4 px-1.5 py-0 text-[10px]">
                 {adjustmentsCount}
               </Badge>
-            )}
+            ) : null}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="schedule" className="mt-4">
           <ScheduleView
             planId={plan.id}
+            currency={plan.currency}
             schedules={schedules}
             activeScheduleId={activeScheduleId}
             onSelectSchedule={setActiveScheduleId}
@@ -321,11 +352,7 @@ function PlanDetailPage() {
         </TabsContent>
 
         <TabsContent value="adjustments" className="mt-4">
-          <AdjustmentsView
-            plan={plan}
-            onPlanUpdated={handlePlanUpdated}
-            onGenerateSchedule={() => generateMutation.mutate()}
-          />
+          <AdjustmentsView plan={plan} onPlanUpdated={handlePlanUpdated} onGenerateSchedule={() => generate.mutate()} />
         </TabsContent>
       </Tabs>
     </div>

@@ -5,7 +5,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { plansApi } from "@/lib/plans-api";
 import type { Plan } from "@/lib/types";
-import { DashboardPage } from "./DashboardPage";
+import { makePlan } from "@/test/fixtures";
+import { DashboardPage, principalByCurrency } from "./DashboardPage";
 
 const location = vi.hoisted(() => ({ compare: "", navigate: vi.fn() }));
 vi.mock("@tanstack/react-router", async (importOriginal) => {
@@ -26,26 +27,9 @@ afterEach(() => {
 const ids = ["aaaaaaaa", "bbbbbbbb", "cccccccc", "dddddddd", "eeeeeeee"].map(
   (prefix) => `${prefix}-aaaa-aaaa-aaaa-aaaaaaaaaaaa`,
 );
-const plans: Plan[] = ids.map((id, index) => ({
-  id,
-  user_id: "owner",
-  name: `Offer ${index + 1}`,
-  slug: `offer-${index + 1}`,
-  lender: "Bank Alpha",
-  amount: "1200",
-  interest_rate: "3",
-  term: { years: 1, months: 0 },
-  start_date: "2026-01-01",
-  upfront_fees: "0",
-  early_payment_fees: { fixed: "0", percent: "0" },
-  interest_rate_application: "whole_month",
-  status: "draft",
-  one_time_extra_payments: [],
-  recurring_extra_payments: [],
-  interest_rate_changes: [],
-  created_at: "2026-01-01",
-  updated_at: "2026-01-01",
-}));
+const plans: Plan[] = ids.map((id, index) =>
+  makePlan({ id, name: `Offer ${index + 1}`, slug: `offer-${index + 1}`, lender: "Bank Alpha" }),
+);
 
 it.each([
   ["malformed", `${ids[0]},bad-id`, 1],
@@ -78,4 +62,14 @@ it.each([
   if (_case !== "uppercase") expect(screen.getByRole("alert")).toHaveTextContent(/removed/i);
   expect(screen.getAllByText("Bank Alpha")).toHaveLength(5);
   expect(screen.getByText("Offer 1")).toBeVisible();
+});
+
+it("totals principal per currency", () => {
+  expect(
+    principalByCurrency([
+      makePlan({ amount: "1000", currency: "USD" }),
+      makePlan({ amount: "500", currency: "USD" }),
+      makePlan({ amount: "200", currency: "EUR" }),
+    ]),
+  ).toBe("$1,500.00 · €200.00");
 });

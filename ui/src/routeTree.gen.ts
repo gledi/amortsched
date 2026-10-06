@@ -13,9 +13,17 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppCompareRouteImport } from './routes/_app/compare'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AuthForgotPasswordRouteImport } from './routes/_auth/forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
 import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
+import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
+import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email'
 import { Route as AppPlansPlanIdRouteImport } from './routes/_app/plans.$planId'
+import { Route as AppToolsIndexRouteImport } from './routes/_app/tools/index'
+import { Route as AppToolsAffordabilityRouteImport } from './routes/_app/tools/affordability'
+import { Route as AppToolsPrepayVsInvestRouteImport } from './routes/_app/tools/prepay-vs-invest'
+import { Route as AppToolsRefinanceRouteImport } from './routes/_app/tools/refinance'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -35,6 +43,16 @@ const AppCompareRoute = AppCompareRouteImport.update({
   path: '/compare',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -45,50 +63,138 @@ const AuthRegisterRoute = AuthRegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthVerifyEmailRoute = AuthVerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AppPlansPlanIdRoute = AppPlansPlanIdRouteImport.update({
   id: '/plans/$planId',
   path: '/plans/$planId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppToolsIndexRoute = AppToolsIndexRouteImport.update({
+  id: '/tools/',
+  path: '/tools/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppToolsAffordabilityRoute = AppToolsAffordabilityRouteImport.update({
+  id: '/tools/affordability',
+  path: '/tools/affordability',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppToolsPrepayVsInvestRoute = AppToolsPrepayVsInvestRouteImport.update({
+  id: '/tools/prepay-vs-invest',
+  path: '/tools/prepay-vs-invest',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppToolsRefinanceRoute = AppToolsRefinanceRouteImport.update({
+  id: '/tools/refinance',
+  path: '/tools/refinance',
   getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/compare': typeof AppCompareRoute
+  '/settings': typeof AppSettingsRoute
+  '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
+  '/reset-password': typeof AuthResetPasswordRoute
+  '/verify-email': typeof AuthVerifyEmailRoute
   '/plans/$planId': typeof AppPlansPlanIdRoute
+  '/tools/affordability': typeof AppToolsAffordabilityRoute
+  '/tools/prepay-vs-invest': typeof AppToolsPrepayVsInvestRoute
+  '/tools/refinance': typeof AppToolsRefinanceRoute
+  '/tools/': typeof AppToolsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/compare': typeof AppCompareRoute
+  '/settings': typeof AppSettingsRoute
+  '/forgot-password': typeof AuthForgotPasswordRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
+  '/reset-password': typeof AuthResetPasswordRoute
+  '/verify-email': typeof AuthVerifyEmailRoute
   '/plans/$planId': typeof AppPlansPlanIdRoute
+  '/tools/affordability': typeof AppToolsAffordabilityRoute
+  '/tools/prepay-vs-invest': typeof AppToolsPrepayVsInvestRoute
+  '/tools/refinance': typeof AppToolsRefinanceRoute
+  '/tools': typeof AppToolsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/_auth': typeof AuthRouteWithChildren
   '/_app/compare': typeof AppCompareRoute
+  '/_app/settings': typeof AppSettingsRoute
+  '/_auth/forgot-password': typeof AuthForgotPasswordRoute
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/register': typeof AuthRegisterRoute
+  '/_auth/reset-password': typeof AuthResetPasswordRoute
+  '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/_app/': typeof AppIndexRoute
   '/_app/plans/$planId': typeof AppPlansPlanIdRoute
+  '/_app/tools/affordability': typeof AppToolsAffordabilityRoute
+  '/_app/tools/prepay-vs-invest': typeof AppToolsPrepayVsInvestRoute
+  '/_app/tools/refinance': typeof AppToolsRefinanceRoute
+  '/_app/tools/': typeof AppToolsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/compare' | '/login' | '/register' | '/plans/$planId'
+  fullPaths:
+    | '/'
+    | '/compare'
+    | '/settings'
+    | '/forgot-password'
+    | '/login'
+    | '/register'
+    | '/reset-password'
+    | '/verify-email'
+    | '/plans/$planId'
+    | '/tools/affordability'
+    | '/tools/prepay-vs-invest'
+    | '/tools/refinance'
+    | '/tools/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/compare' | '/login' | '/register' | '/plans/$planId'
+  to:
+    | '/'
+    | '/compare'
+    | '/settings'
+    | '/forgot-password'
+    | '/login'
+    | '/register'
+    | '/reset-password'
+    | '/verify-email'
+    | '/plans/$planId'
+    | '/tools/affordability'
+    | '/tools/prepay-vs-invest'
+    | '/tools/refinance'
+    | '/tools'
   id:
     | '__root__'
     | '/_app'
     | '/_auth'
     | '/_app/compare'
+    | '/_app/settings'
+    | '/_auth/forgot-password'
     | '/_auth/login'
     | '/_auth/register'
+    | '/_auth/reset-password'
+    | '/_auth/verify-email'
     | '/_app/'
     | '/_app/plans/$planId'
+    | '/_app/tools/affordability'
+    | '/_app/tools/prepay-vs-invest'
+    | '/_app/tools/refinance'
+    | '/_app/tools/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -126,6 +232,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompareRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_auth/forgot-password': {
+      id: '/_auth/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/login': {
       id: '/_auth/login'
       path: '/login'
@@ -140,6 +260,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRegisterRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/reset-password': {
+      id: '/_auth/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/verify-email': {
+      id: '/_auth/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof AuthVerifyEmailRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_app/plans/$planId': {
       id: '/_app/plans/$planId'
       path: '/plans/$planId'
@@ -147,31 +281,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPlansPlanIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/tools/': {
+      id: '/_app/tools/'
+      path: '/tools'
+      fullPath: '/tools/'
+      preLoaderRoute: typeof AppToolsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tools/affordability': {
+      id: '/_app/tools/affordability'
+      path: '/tools/affordability'
+      fullPath: '/tools/affordability'
+      preLoaderRoute: typeof AppToolsAffordabilityRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tools/prepay-vs-invest': {
+      id: '/_app/tools/prepay-vs-invest'
+      path: '/tools/prepay-vs-invest'
+      fullPath: '/tools/prepay-vs-invest'
+      preLoaderRoute: typeof AppToolsPrepayVsInvestRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tools/refinance': {
+      id: '/_app/tools/refinance'
+      path: '/tools/refinance'
+      fullPath: '/tools/refinance'
+      preLoaderRoute: typeof AppToolsRefinanceRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppCompareRoute: typeof AppCompareRoute
+  AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppPlansPlanIdRoute: typeof AppPlansPlanIdRoute
+  AppToolsAffordabilityRoute: typeof AppToolsAffordabilityRoute
+  AppToolsPrepayVsInvestRoute: typeof AppToolsPrepayVsInvestRoute
+  AppToolsRefinanceRoute: typeof AppToolsRefinanceRoute
+  AppToolsIndexRoute: typeof AppToolsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppCompareRoute: AppCompareRoute,
+  AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
   AppPlansPlanIdRoute: AppPlansPlanIdRoute,
+  AppToolsAffordabilityRoute: AppToolsAffordabilityRoute,
+  AppToolsPrepayVsInvestRoute: AppToolsPrepayVsInvestRoute,
+  AppToolsRefinanceRoute: AppToolsRefinanceRoute,
+  AppToolsIndexRoute: AppToolsIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface AuthRouteChildren {
+  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
+  AuthResetPasswordRoute: typeof AuthResetPasswordRoute
+  AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
+  AuthResetPasswordRoute: AuthResetPasswordRoute,
+  AuthVerifyEmailRoute: AuthVerifyEmailRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)

@@ -1,42 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { makeComparison, makeComparisonItem } from "@/test/fixtures";
 import type { PlanComparison, PlanComparisonItem } from "./types";
-import { comparisonHeadline } from "./comparison-presentation";
+import { comparisonHeadline, crossoverMonth, horizonHeadline } from "./comparison-presentation";
 
-const plan: PlanComparisonItem = {
-  id: "union",
-  name: "Union offer",
-  lender: "Union Bank",
-  principal: "250000",
-  interest_rate: "4.5",
-  term: { years: 30, months: 0 },
-  start_date: "2026-01-01",
-  starting_monthly_payment: "1266.71",
-  configured_early_payment_fees: { fixed: "0", percent: "0" },
-  upfront_fees: "1500",
-  total_principal: "250000",
-  total_interest: "200000",
-  schedule_fees: "0",
-  schedule_total_outflow: "450000",
-  total_cost: "451500",
-  payoff_months: 360,
-  payoff_month: "2055-12",
-  paid_off: true,
-  adjustment_counts: { one_time_extra_payments: 0, recurring_extra_payments: 0, interest_rate_changes: 0 },
-};
-const comparison: PlanComparison = {
-  directly_comparable: true,
-  incomparability_reasons: [],
+const plan: PlanComparisonItem = makeComparisonItem();
+const comparison: PlanComparison = makeComparison({
   overall_winner_plan_ids: ["union"],
   savings_vs_next_best: "18870.00",
-  best_plan_ids_by_metric: {},
   plans: [plan, { ...plan, id: "other", name: "Other offer", lender: null, total_cost: "470370" }],
-};
+});
 
 describe("comparisonHeadline", () => {
   it("describes a unique winner and savings", () => {
     expect(comparisonHeadline(comparison)).toEqual({
       title: "Union Bank has the lowest total cost",
-      description: "Saves $18,870.00 versus the next-lowest offer.",
+      description: "Saves $18,870.00 versus the next-lowest offer, including fees and PMI.",
       variant: "default",
     });
   });
@@ -69,6 +47,40 @@ describe("comparisonHeadline", () => {
       savings_vs_next_best: "12.34",
     });
     expect(headline.title).toBe("Other offer has the lowest total cost");
-    expect(headline.description).toBe("Saves $12.34 versus the next-lowest offer.");
+    expect(headline.description).toBe("Saves $12.34 versus the next-lowest offer, including fees and PMI.");
+  });
+});
+
+describe("horizonHeadline", () => {
+  it("names the cheapest offer at the horizon and the saving", () => {
+    const headline = horizonHeadline(
+      makeComparison({
+        horizon_months: 60,
+        horizon_winner_plan_ids: ["union"],
+        plans: [
+          makeComparisonItem({ horizon: { months: 60, cost: "1000", balance: "0", payoff_penalty: "0" } }),
+          makeComparisonItem({
+            id: "other",
+            lender: null,
+            name: "Other",
+            horizon: { months: 60, cost: "1250", balance: "0", payoff_penalty: "0" },
+          }),
+        ],
+      }),
+    );
+    expect(headline).toBe("If you sell or refinance after 5 yrs, Union Bank costs least, saving $250.00.");
+  });
+
+  it("is silent without a horizon", () => {
+    expect(horizonHeadline(makeComparison())).toBeNull();
+  });
+});
+
+describe("crossoverMonth", () => {
+  it("finds where the cheaper offer changes", () => {
+    const fees = makeComparisonItem({ cumulative_cost: ["100", "101", "102", "103"] });
+    const rate = makeComparisonItem({ id: "rate", cumulative_cost: ["0", "40", "80", "120"] });
+    expect(crossoverMonth(fees, rate)).toBe(3);
+    expect(crossoverMonth(fees, fees)).toBeNull();
   });
 });

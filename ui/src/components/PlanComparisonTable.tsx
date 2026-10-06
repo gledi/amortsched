@@ -2,64 +2,97 @@ import { Link } from "@tanstack/react-router";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatCurrency, formatDate, formatPercent, formatTerm } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatMonths, formatPercent, formatTerm } from "@/lib/formatters";
+import { loanTypeLabel } from "@/lib/plan-form";
 import type { PlanComparison, PlanComparisonItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const metrics: { key: string; label: string; value: (plan: PlanComparisonItem) => string }[] = [
+type Metric = { key: string; label: string; value: (plan: PlanComparisonItem) => string };
+
+const money = (plan: PlanComparisonItem, value: string | number | null) =>
+  value === null ? "—" : formatCurrency(value, plan.currency);
+
+const headlineMetrics: Metric[] = [
   {
-    key: "starting_monthly_payment",
-    label: "Starting monthly payment",
-    value: (p) => formatCurrency(p.starting_monthly_payment),
+    key: "starting_total_monthly_payment",
+    label: "Monthly payment (incl. tax, insurance, PMI)",
+    value: (p) => money(p, p.starting_total_monthly_payment),
   },
-  { key: "total_cost", label: "Total cost", value: (p) => formatCurrency(p.total_cost) },
+  { key: "starting_monthly_payment", label: "Loan payment", value: (p) => money(p, p.starting_monthly_payment) },
+  { key: "total_cost", label: "Total cost", value: (p) => money(p, p.total_cost) },
+];
+
+const detailMetrics: Metric[] = [
   { key: "lender", label: "Lender", value: (p) => p.lender || "—" },
   { key: "name", label: "Plan name", value: (p) => p.name },
-  { key: "principal", label: "Principal", value: (p) => formatCurrency(p.principal) },
+  { key: "loan_type", label: "Loan type", value: (p) => loanTypeLabel(p.loan_type) },
+  { key: "currency", label: "Currency", value: (p) => p.currency },
+  { key: "principal", label: "Loan amount", value: (p) => money(p, p.principal) },
+  { key: "down_payment", label: "Down payment", value: (p) => money(p, p.down_payment) },
+  { key: "ltv", label: "Loan-to-value", value: (p) => (p.ltv === null ? "—" : formatPercent(p.ltv)) },
   { key: "interest_rate", label: "Interest rate", value: (p) => formatPercent(p.interest_rate) },
   { key: "term", label: "Term", value: (p) => formatTerm(p.term) },
-  { key: "start_date", label: "Start date", value: (p) => formatDate(p.start_date) },
-  { key: "upfront_fees", label: "Upfront fees", value: (p) => formatCurrency(p.upfront_fees) },
+  { key: "start_date", label: "First payment", value: (p) => formatDate(p.start_date) },
+  {
+    key: "starting_monthly_housing",
+    label: "Tax, insurance, HOA & PMI / month",
+    value: (p) => money(p, p.starting_monthly_housing),
+  },
+  { key: "upfront_fees", label: "Upfront fees", value: (p) => money(p, p.upfront_fees) },
   {
     key: "early_payment_fixed",
-    label: "Early-payment fee (fixed)",
-    value: (p) => formatCurrency(p.configured_early_payment_fees.fixed),
+    label: "Prepayment fee (fixed)",
+    value: (p) => money(p, p.configured_early_payment_fees.fixed),
   },
   {
     key: "early_payment_percent",
-    label: "Early-payment fee (%)",
+    label: "Prepayment fee (%)",
     value: (p) => formatPercent(p.configured_early_payment_fees.percent),
   },
-  { key: "total_principal", label: "Schedule principal", value: (p) => formatCurrency(p.total_principal) },
-  { key: "total_interest", label: "Schedule interest", value: (p) => formatCurrency(p.total_interest) },
-  { key: "schedule_fees", label: "Schedule fees", value: (p) => formatCurrency(p.schedule_fees) },
-  { key: "schedule_total_outflow", label: "Schedule outflow", value: (p) => formatCurrency(p.schedule_total_outflow) },
+  { key: "total_interest", label: "Total interest", value: (p) => money(p, p.total_interest) },
+  { key: "schedule_fees", label: "Prepayment fees paid", value: (p) => money(p, p.schedule_fees) },
+  { key: "total_pmi", label: "Total PMI", value: (p) => money(p, p.total_pmi) },
+  { key: "total_escrow", label: "Tax, insurance & HOA (not loan cost)", value: (p) => money(p, p.total_escrow) },
   { key: "payoff_months", label: "Months to payoff", value: (p) => String(p.payoff_months) },
   { key: "payoff_month", label: "Payoff month", value: (p) => formatDate(p.payoff_month) },
   { key: "paid_off", label: "Paid off", value: (p) => (p.paid_off ? "Yes" : "No") },
   {
-    key: "one_time_extra_payments",
-    label: "One-time extra payments",
-    value: (p) => String(p.adjustment_counts.one_time_extra_payments),
-  },
-  {
-    key: "recurring_extra_payments",
-    label: "Recurring extra payments",
-    value: (p) => String(p.adjustment_counts.recurring_extra_payments),
-  },
-  {
-    key: "interest_rate_changes",
-    label: "Interest rate changes",
-    value: (p) => String(p.adjustment_counts.interest_rate_changes),
+    key: "adjustments",
+    label: "Extra payments / rate changes",
+    value: (p) =>
+      `${p.adjustment_counts.one_time_extra_payments + p.adjustment_counts.recurring_extra_payments} / ${p.adjustment_counts.interest_rate_changes}`,
   },
 ];
 
+function horizonMetrics(months: number): Metric[] {
+  const period = formatMonths(months);
+  return [
+    {
+      key: "cost_at_horizon",
+      label: `Cost if you exit after ${period}`,
+      value: (p) => (p.horizon ? money(p, p.horizon.cost) : "—"),
+    },
+    {
+      key: "balance_at_horizon",
+      label: `Balance left after ${period}`,
+      value: (p) => (p.horizon ? money(p, p.horizon.balance) : "—"),
+    },
+  ];
+}
+
 export function PlanComparisonTable({ comparison }: { comparison: PlanComparison }) {
+  const metrics = [
+    ...headlineMetrics,
+    ...(comparison.horizon_months !== null ? horizonMetrics(comparison.horizon_months) : []),
+    ...detailMetrics,
+  ];
   return (
     <Card>
       <CardHeader>
         <CardTitle>Offer details</CardTitle>
-        <CardDescription>Compare terms, costs, and payoff timing. Best values include ties.</CardDescription>
+        <CardDescription>
+          Total cost is everything paid to the lender plus upfront fees and PMI. Best values include ties.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
