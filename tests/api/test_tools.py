@@ -210,7 +210,9 @@ async def plan_totals(client, headers, terms: dict, **extras) -> dict:
     assert plan.status_code == 201, plan.text
     schedule = await client.post(f"/api/plans/{plan.json()['id']}/schedules", headers=headers)
     return {
-        key: Decimal(value) for key, value in schedule.json()["totals"].items() if key in {"interest", "total_outflow"}
+        key: Decimal(value)
+        for key, value in schedule.json()["totals"].items()
+        if key in {"interest", "fees", "total_outflow", "months"}
     }
 
 
@@ -275,3 +277,28 @@ async def test_prepay_vs_invest_baseline_is_the_plan_schedule(client, auth_heade
     body = response.json()
     assert Decimal(body["interest_without_prepayment"]) == Decimal(schedule["totals"]["interest"])
     assert Decimal(body["regular_payment"]) == Decimal(plan["monthly_payment"])
+
+
+@pytest.mark.anyio
+async def test_prepay_vs_invest_stacks_the_extra_on_a_plan_and_counts_its_penalties(client, auth_headers):
+    terms = {**VARIABLE_RATE_PLAN, "early_payment_fees": {"fixed": "5", "percent": "1"}}
+    created = await client.post("/api/plans", json={"name": "Penalised", **terms}, headers=auth_headers)
+    assert created.status_code == 201, created.text
+    stacked = [*terms["recurring_extra_payments"], {"start_date": "2026-03-15", "amount": "200", "count": 300}]
+    baseline = await plan_totals(client, auth_headers, terms)
+    prepay = await plan_totals(client, auth_headers, terms, recurring_extra_payments=stacked)
+
+    response = await client.post(
+        "/api/tools/prepay-vs-invest",
+        json={"plan_id": created.json()["id"], "extra_monthly": "200", "annual_return": "0"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert prepay["fees"] > baseline["fees"]
+    assert Decimal(body["interest_with_prepayment"]) == prepay["interest"]
+    extras = baseline["months"] * Decimal(200)
+    assert len(body["timeline"]) == baseline["months"]
+    assert Decimal(body["invest_net_worth"]) == extras
+    assert Decimal(body["prepay_net_worth"]) == baseline["total_outflow"] + extras - prepay["total_outflow"]
