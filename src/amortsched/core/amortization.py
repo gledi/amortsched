@@ -4,8 +4,9 @@ from collections.abc import Generator
 from decimal import Decimal
 from typing import override
 
-from amortsched.core.calculators import level_payment
+from amortsched.core.calculators import monthly_payment
 from amortsched.core.errors import AmortizationError, InvalidExtraPaymentError, InvalidRecurringPaymentError
+from amortsched.core.money import round_cents
 from amortsched.core.values import (
     DAYS_IN_YEAR,
     Amount,
@@ -87,7 +88,7 @@ class AmortizationSchedule:
         return self.term.periods
 
     def starting_payment(self, start_date: datetime.date) -> Decimal:
-        return level_payment(self.amount, self._yearly_rate_percent_for_date(start_date), self.periods)
+        return monthly_payment(self.amount, self._yearly_rate_percent_for_date(start_date), self.periods)
 
     @property
     def last_totals(self) -> ScheduleTotals | None:
@@ -110,17 +111,7 @@ class AmortizationSchedule:
                 break
         return chosen.yearly_interest_rate if chosen is not None else self.interest_rate
 
-    def _monthly_rate_for_date(self, dt: datetime.date) -> Decimal:
-        yearly_percent = self._yearly_rate_percent_for_date(dt)
-        yearly_fraction = yearly_percent / Decimal("100.00")
-        return yearly_fraction / Decimal("12.00")
-
-    def _daily_rate_for_date(self, dt: datetime.date) -> Decimal:
-        yearly_percent = self._yearly_rate_percent_for_date(dt)
-        yearly_fraction = yearly_percent / Decimal("100.00")
-        return yearly_fraction / DAYS_IN_YEAR
-
-    def _daily_rate_for_date_with_application_limit(
+    def _yearly_rate_percent_with_application_limit(
         self,
         dt: datetime.date,
         *,
@@ -128,16 +119,14 @@ class AmortizationSchedule:
         scheduled_month: int,
     ) -> Decimal:
         if self.interest_rate_application != InterestRateApplication.ProratedByDaysInMonth:
-            return self._daily_rate_for_date(dt)
+            return self._yearly_rate_percent_for_date(dt)
 
         # In ProratedByDaysInMonth mode, ignore rate changes that happen after the scheduled month.
         # This mirrors the original behavior where only changes inside the scheduled month were considered.
         days_in_month = calendar.monthrange(scheduled_month_year, scheduled_month)[1]
         last_day_of_scheduled_month = datetime.date(scheduled_month_year, scheduled_month, days_in_month)
         effective_dt = dt if dt <= last_day_of_scheduled_month else last_day_of_scheduled_month
-        yearly_percent = self._yearly_rate_percent_for_date(effective_dt)
-        yearly_fraction = yearly_percent / Decimal("100.00")
-        return yearly_fraction / DAYS_IN_YEAR
+        return self._yearly_rate_percent_for_date(effective_dt)
 
     def _extras_for_period(
         self,
@@ -234,22 +223,25 @@ class AmortizationSchedule:
         )
         return row, after
 
-    def _daily_rate_for_segment(
+    def _yearly_rate_percent_for_segment(
         self,
         *,
         period_start: datetime.date,
-        period_end: datetime.date,
         segment_start: datetime.date,
     ) -> Decimal:
         if self.interest_rate_application == InterestRateApplication.WholeMonth:
-            days = (period_end - period_start).days
-            return self._monthly_rate_for_date(period_start) / Decimal(days)
+            return self._yearly_rate_percent_for_date(period_start)
 
-        return self._daily_rate_for_date_with_application_limit(
+        return self._yearly_rate_percent_with_application_limit(
             segment_start,
             scheduled_month_year=period_start.year,
             scheduled_month=period_start.month,
         )
+
+    def _days_in_year(self, *, period_start: datetime.date, period_end: datetime.date) -> Decimal:
+        if self.interest_rate_application == InterestRateApplication.WholeMonth:
+            return Decimal(12 * (period_end - period_start).days)
+        return DAYS_IN_YEAR
 
     def _accrue_interest_and_apply_extras(
         self,
@@ -268,20 +260,15 @@ class AmortizationSchedule:
         segment_starts.append(period_end)
 
         installments: list[Installment] = []
-        interest_total = Decimal("0.00")
+        interest_percent_days = Decimal("0.00")
         for i in range(len(segment_starts) - 1):
             segment_start = segment_starts[i]
             segment_end = segment_starts[i + 1]
             days = (segment_end - segment_start).days
             if days <= 0:
                 continue
-            rate = self._daily_rate_for_segment(
-                period_start=period_start,
-                period_end=period_end,
-                segment_start=segment_start,
-            )
-            interest = balance * rate * Decimal(days)
-            interest_total += interest
+            rate = self._yearly_rate_percent_for_segment(period_start=period_start, segment_start=segment_start)
+            interest_percent_days += balance * rate * days
 
             if segment_start in extras_by_date:
                 for kind, amount in extras_by_date[segment_start]:
@@ -304,7 +291,9 @@ class AmortizationSchedule:
             if extra_row:
                 installments.append(extra_row)
 
-        return installments, balance, interest_total
+        days_in_year = self._days_in_year(period_start=period_start, period_end=period_end)
+        interest = round_cents(interest_percent_days / (Decimal("100") * days_in_year))
+        return installments, balance, interest
 
     def _validate_one_time_extra_payment(self, date: datetime.date, amount: Decimal) -> None:
         if amount <= 0:
@@ -345,7 +334,7 @@ class AmortizationSchedule:
             period_rate = self._yearly_rate_percent_for_date(period_start)
             if period_rate != payment_rate:
                 payment_rate = period_rate
-                scheduled_amount = level_payment(balance, payment_rate, self.periods - scheduled_payment_index)
+                scheduled_amount = monthly_payment(balance, payment_rate, self.periods - scheduled_payment_index)
 
             extras, balance, accrued_interest = self._accrue_interest_and_apply_extras(
                 period_start=period_start,

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from amortsched.core.errors import InvalidTermError, ValidationError
+from amortsched.core.money import round_cents
 
 type Amount = int | float | Decimal
 type TermType = int | tuple[int, int] | Term
@@ -58,7 +59,7 @@ class EarlyPaymentFees:
 
         amount = amount if isinstance(amount, Decimal) else Decimal(amount)
         percent_fee = amount * (percent / Decimal("100.00"))
-        return fixed + percent_fee
+        return round_cents(fixed + percent_fee)
 
     def principal(self, amount: Amount) -> Decimal:
         amount = amount if isinstance(amount, Decimal) else Decimal(amount)

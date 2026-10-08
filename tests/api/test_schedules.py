@@ -73,5 +73,9 @@ async def test_schedule_for_plan_with_rate_changes_pays_off_at_plan_payment(clie
     assert data["totals"]["months"] == 360
     assert Decimal(scheduled[-1]["balance"]["after"]) == 0
     assert plan["monthly_payment"] == "804.62"
-    assert Decimal(scheduled[0]["total"]).quantize(Decimal("0.01")) == Decimal(plan["monthly_payment"])
-    assert Decimal(scheduled[12]["total"]).quantize(Decimal("0.01")) == Decimal("1025.31")
+    assert Decimal(scheduled[0]["total"]) == Decimal(plan["monthly_payment"])
+    assert Decimal(scheduled[12]["total"]) == Decimal("1025.31")
+    for row in data["installments"]:
+        amounts = [row[key] for key in ("principal", "interest", "fees", "total")]
+        amounts += [row["balance"]["before"], row["balance"]["after"]]
+        assert all(Decimal(amount) == Decimal(amount).quantize(Decimal("0.01")) for amount in amounts), row
