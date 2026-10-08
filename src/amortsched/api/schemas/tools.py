@@ -13,12 +13,11 @@ from amortsched.core.calculators import (
     RefinanceResult,
     Strategy,
 )
-
-CENT = Decimal("0.01")
+from amortsched.core.money import round_cents
 
 
 def money(value: Decimal) -> Decimal:
-    return value.quantize(CENT)
+    return round_cents(value)
 
 
 class AffordabilityRequest(BaseModel):

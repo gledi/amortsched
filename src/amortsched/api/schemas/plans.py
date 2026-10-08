@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from amortsched.api.schemas.schedules import HousingPaymentSchema
 from amortsched.core.entities import Plan
+from amortsched.core.money import round_cents
 from amortsched.core.values import (
     HousingCosts,
     InterestRateApplication,
@@ -14,8 +15,6 @@ from amortsched.core.values import (
     OneTimeExtraPayment,
     RecurringExtraPayment,
 )
-
-CENT = Decimal("0.01")
 
 
 class TermSchema(BaseModel):
@@ -195,8 +194,8 @@ class PlanResponse(BaseModel):
             ),
             housing_costs=HousingCostsSchema.from_value(plan.housing_costs),
             down_payment=plan.housing_costs.down_payment(plan.amount),
-            ltv=None if ltv is None else ltv.quantize(CENT),
-            monthly_payment=plan.monthly_payment.quantize(CENT),
+            ltv=None if ltv is None else round_cents(ltv),
+            monthly_payment=round_cents(plan.monthly_payment),
             monthly_housing=None if housing is None else HousingPaymentSchema.from_value(housing),
             interest_rate_application=plan.interest_rate_application.value,
             status=plan.status.value,

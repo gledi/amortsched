@@ -5,9 +5,8 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 from amortsched.core.entities import Schedule
+from amortsched.core.money import round_cents
 from amortsched.core.values import HousingPayment, Installment, ScheduleTotals
-
-CENT = Decimal("0.01")
 
 
 class BalanceSchema(BaseModel):
@@ -25,11 +24,11 @@ class HousingPaymentSchema(BaseModel):
     @classmethod
     def from_value(cls, housing: HousingPayment) -> "HousingPaymentSchema":
         return cls(
-            property_tax=housing.property_tax.quantize(CENT),
-            insurance=housing.insurance.quantize(CENT),
-            hoa=housing.hoa.quantize(CENT),
-            pmi=housing.pmi.quantize(CENT),
-            total=housing.total.quantize(CENT),
+            property_tax=round_cents(housing.property_tax),
+            insurance=round_cents(housing.insurance),
+            hoa=round_cents(housing.hoa),
+            pmi=round_cents(housing.pmi),
+            total=round_cents(housing.total),
         )
 
 
@@ -62,7 +61,7 @@ class InstallmentSchema(BaseModel):
             total=inst.payment.total,
             balance=BalanceSchema(before=inst.balance.before, after=inst.balance.after),
             housing=None if inst.housing is None else HousingPaymentSchema.from_value(inst.housing),
-            total_with_housing=(inst.payment.total + housing_total).quantize(CENT),
+            total_with_housing=round_cents(inst.payment.total + housing_total),
         )
 
 
@@ -85,8 +84,8 @@ class TotalsSchema(BaseModel):
             total_outflow=totals.total_outflow,
             months=totals.months,
             paid_off=totals.paid_off,
-            pmi=totals.pmi.quantize(CENT),
-            escrow=totals.escrow.quantize(CENT),
+            pmi=round_cents(totals.pmi),
+            escrow=round_cents(totals.escrow),
         )
 
 
