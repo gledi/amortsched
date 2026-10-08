@@ -7,11 +7,10 @@ from types import MappingProxyType
 
 from amortsched.core.entities import Plan, Schedule
 from amortsched.core.errors import PlanNotFoundError, ValidationError
+from amortsched.core.money import round_cents
 from amortsched.core.repositories import AsyncRepository
 from amortsched.core.specifications import Eq, In
 from amortsched.core.values import EarlyPaymentFees, LoanType, Term
-
-CENT = Decimal("0.01")
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,9 +181,9 @@ class ComparePlansHandler:
             penalty = plan.early_payment_fees.penalty(balance) if balance > 0 else Decimal("0.00")
             horizon = HorizonCost(
                 months=horizon_months,
-                cost=(cumulative_cost[month] + penalty).quantize(CENT),
-                balance=balance.quantize(CENT),
-                payoff_penalty=penalty.quantize(CENT),
+                cost=round_cents(cumulative_cost[month] + penalty),
+                balance=round_cents(balance),
+                payoff_penalty=round_cents(penalty),
             )
 
         return PlanComparisonItem(
@@ -201,7 +200,7 @@ class ComparePlansHandler:
             starting_monthly_housing=starting_housing,
             starting_total_monthly_payment=first_scheduled.payment.total + starting_housing,
             down_payment=plan.housing_costs.down_payment(plan.amount),
-            ltv=None if ltv is None else ltv.quantize(CENT),
+            ltv=None if ltv is None else round_cents(ltv),
             configured_early_payment_fees=EarlyPaymentFees(
                 fixed=plan.early_payment_fees.fixed,
                 percent=plan.early_payment_fees.percent,
@@ -240,15 +239,15 @@ def _cost_timeline(
     """
     plan_amount = schedule.installments[0].balance.before if schedule.installments else Decimal("0.00")
     running = upfront_fees
-    costs = [running.quantize(CENT)]
+    costs = [round_cents(running)]
     balances = [plan_amount]
     for installment in schedule.installments:
         pmi = installment.housing.pmi if installment.housing is not None else Decimal("0.00")
         running += installment.payment.interest + installment.payment.fees + pmi
         if installment.i is not None:
-            costs.append(running.quantize(CENT))
+            costs.append(round_cents(running))
             balances.append(installment.balance.after)
-    final_cost = finance_cost.quantize(CENT)
+    final_cost = round_cents(finance_cost)
     if costs[-1] != final_cost or (paid_off and balances[-1] > 0):
         costs.append(final_cost)
         balances.append(Decimal("0.00"))

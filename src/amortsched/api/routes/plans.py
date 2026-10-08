@@ -42,6 +42,7 @@ from amortsched.app.commands.plans import (
 )
 from amortsched.app.queries.plans import GetPlanQuery, ListPlansQuery
 from amortsched.core.entities import Plan
+from amortsched.core.money import round_cents
 from amortsched.core.utils import today
 from amortsched.core.values import EarlyPaymentFees, Term
 
@@ -242,7 +243,7 @@ CSV_COLUMNS = [
 
 
 def _money(value: Decimal) -> str:
-    return str(value.quantize(Decimal("0.01")))
+    return str(round_cents(value))
 
 
 def schedule_csv(plan: Plan) -> str:

@@ -6,9 +6,8 @@ from pydantic import BaseModel, Field, model_validator
 
 from amortsched.api.schemas.plans import EarlyPaymentFeesSchema, TermSchema
 from amortsched.app.queries.comparisons import HorizonCost, PlanComparison, PlanComparisonItem
+from amortsched.core.money import round_cents
 from amortsched.core.values import LoanType
-
-CENT = Decimal("0.01")
 
 
 class PlanComparisonRequest(BaseModel):
@@ -87,9 +86,9 @@ class PlanComparisonItemResponse(BaseModel):
             interest_rate=item.interest_rate,
             term=TermSchema(years=item.term.years, months=item.term.months),
             start_date=item.start_date,
-            starting_monthly_payment=item.starting_monthly_payment.quantize(CENT),
-            starting_monthly_housing=item.starting_monthly_housing.quantize(CENT),
-            starting_total_monthly_payment=item.starting_total_monthly_payment.quantize(CENT),
+            starting_monthly_payment=round_cents(item.starting_monthly_payment),
+            starting_monthly_housing=round_cents(item.starting_monthly_housing),
+            starting_total_monthly_payment=round_cents(item.starting_total_monthly_payment),
             down_payment=item.down_payment,
             ltv=item.ltv,
             configured_early_payment_fees=EarlyPaymentFeesSchema(
@@ -101,9 +100,9 @@ class PlanComparisonItemResponse(BaseModel):
             total_interest=item.total_interest,
             schedule_fees=item.schedule_fees,
             schedule_total_outflow=item.schedule_total_outflow,
-            total_pmi=item.total_pmi.quantize(CENT),
-            total_escrow=item.total_escrow.quantize(CENT),
-            total_cost=item.total_cost.quantize(CENT),
+            total_pmi=round_cents(item.total_pmi),
+            total_escrow=round_cents(item.total_escrow),
+            total_cost=round_cents(item.total_cost),
             payoff_months=item.payoff_months,
             payoff_month=item.payoff_month,
             paid_off=item.paid_off,
