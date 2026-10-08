@@ -1,12 +1,13 @@
 import datetime
 import uuid
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
 from amortsched.app.access import get_owned_plan
-from amortsched.core.amortization import AmortizationSchedule, next_month
+from amortsched.core.amortization import AmortizationSchedule, next_month, recurrence_dates
 from amortsched.core.calculators import (
+    PeriodRow,
     PrepayVsInvestInput,
     PrepayVsInvestResult,
     RefinanceResult,
@@ -19,7 +20,8 @@ from amortsched.core.entities import Plan
 from amortsched.core.errors import ValidationError
 from amortsched.core.money import ZERO
 from amortsched.core.repositories import AsyncRepository
-from amortsched.core.values import Installment, InterestRateApplication, RecurringExtraPayment
+from amortsched.core.utils import today
+from amortsched.core.values import InterestRateApplication
 
 
 def entered_terms_schedule(principal: Decimal, annual_rate: Decimal, months: int) -> AmortizationSchedule:
@@ -35,26 +37,53 @@ def entered_terms_schedule(principal: Decimal, annual_rate: Decimal, months: int
     )
 
 
-def compare_refinance(
+def _compare_refinance(
     *,
-    current: Iterable[Installment],
+    current: Sequence[PeriodRow],
     current_balance: Decimal,
     new_loan: Callable[[Decimal], AmortizationSchedule],
     new_start: datetime.date,
     closing_costs: Decimal,
     roll_costs_into_loan: bool,
 ) -> RefinanceResult:
-    """Compare keeping the current loan's installments with a new loan built for the refinanced principal.
+    """Compare keeping the current loan's periods with a new loan built for the refinanced principal.
 
     Rolled-in closing costs join the new principal; otherwise they are due in cash at closing.
     """
     new_principal = current_balance + (closing_costs if roll_costs_into_loan else ZERO)
     return refinance_from_periods(
-        current=period_rows(current),
+        current=current,
         current_balance=current_balance,
         new=period_rows(new_loan(new_principal).generate(new_start)),
         new_principal=new_principal,
         cash_due=ZERO if roll_costs_into_loan else closing_costs,
+    )
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class RefinanceTermsQuery:
+    """A refinance of loan terms entered without a plan; both loans start on `as_of`, today when omitted."""
+
+    as_of: datetime.date | None
+    current_balance: Decimal
+    current_rate: Decimal
+    remaining_months: int
+    new_rate: Decimal
+    new_term_months: int
+    closing_costs: Decimal
+    roll_costs_into_loan: bool
+
+
+def refinance_on_terms(query: RefinanceTermsQuery) -> RefinanceResult:
+    as_of = query.as_of or today()
+    current = entered_terms_schedule(query.current_balance, query.current_rate, query.remaining_months)
+    return _compare_refinance(
+        current=period_rows(current.generate(as_of)),
+        current_balance=query.current_balance,
+        new_loan=lambda principal: entered_terms_schedule(principal, query.new_rate, query.new_term_months),
+        new_start=as_of,
+        closing_costs=query.closing_costs,
+        roll_costs_into_loan=query.roll_costs_into_loan,
     )
 
 
@@ -69,50 +98,39 @@ class LoanSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class _PlanFromMonth:
+class _RemainingPlan:
     snapshot: LoanSnapshot
-    installments: list[Installment]
-    first_payment_date: datetime.date
+    periods: list[PeriodRow]
+    first_period_start: datetime.date
 
 
-def _plan_from_month(plan: Plan, as_of: datetime.date) -> _PlanFromMonth:
-    """The plan's payment periods from the `as_of` month on, with extras kept in the period they fall in."""
+def _first_kept_period(plan: Plan, as_of: datetime.date) -> tuple[int, datetime.date]:
+    """How many of the plan's periods start before the `as_of` month, and when the first kept one starts."""
     cutoff = (as_of.year, as_of.month)
-    balance = plan.amount
-    remaining: list[Installment] = []
-    period: list[Installment] = []
-    for installment in plan.generate().installments:
-        period.append(installment)
-        if installment.i is None:
-            continue
-        if (installment.year, int(installment.month)) < cutoff:
-            balance = installment.balance.after
-        else:
-            remaining.extend(period)
-        period = []
-    remaining.extend(period)
-    scheduled = sum(1 for installment in remaining if installment.i is not None)
-    if scheduled == 0 or balance <= 0:
+    skipped = 0
+    start = plan.start_date
+    while (start.year, start.month) < cutoff:
+        start = next_month(start, base_day=plan.start_date.day)
+        skipped += 1
+    return skipped, start
+
+
+def _remaining_plan(plan: Plan, as_of: datetime.date) -> _RemainingPlan:
+    """The plan's payment periods from the `as_of` month on, with extras kept in the period they fall in."""
+    schedule = plan.to_schedule()
+    rows = period_rows(schedule.generate(plan.start_date))
+    skipped, first_period_start = _first_kept_period(plan, as_of)
+    kept = rows[skipped:]
+    remaining_months = sum(1 for row in kept if row.scheduled_payment > 0)
+    if remaining_months == 0:
         raise ValidationError([{"field": "as_of", "message": "The plan is fully paid off by that date"}])
-    rate = plan.interest_rate
-    for change in sorted(plan.interest_rate_changes, key=lambda item: item.effective_date):
-        if change.effective_date <= as_of:
-            rate = change.yearly_interest_rate
-    first_payment_date = plan.start_date
-    while (first_payment_date.year, first_payment_date.month) < cutoff:
-        first_payment_date = next_month(first_payment_date, base_day=plan.start_date.day)
-    return _PlanFromMonth(
-        snapshot=LoanSnapshot(balance=balance, rate=rate, remaining_months=scheduled, currency=plan.currency),
-        installments=remaining,
-        first_payment_date=first_payment_date,
+    snapshot = LoanSnapshot(
+        balance=rows[skipped - 1].balance if skipped else plan.amount,
+        rate=schedule.yearly_rate_percent_on(first_period_start),
+        remaining_months=remaining_months,
+        currency=plan.currency,
     )
-
-
-def _occurrences(recurring: RecurringExtraPayment) -> Iterator[datetime.date]:
-    date = recurring.start_date
-    for _ in range(recurring.count):
-        yield date
-        date = next_month(date, base_day=recurring.start_date.day)
+    return _RemainingPlan(snapshot=snapshot, periods=kept, first_period_start=first_period_start)
 
 
 def _refinanced_plan_loan(
@@ -132,7 +150,7 @@ def _refinanced_plan_loan(
                 schedule.add_one_time_extra_payment(extra.date, extra.amount)
         for recurring in plan.recurring_extra_payments:
             # One per occurrence so a day clamped in a short month can't become the new series' base day.
-            for date in _occurrences(recurring):
+            for date in recurrence_dates(recurring):
                 if date >= start:
                     schedule.add_recurring_extra_payment(date, recurring.amount, count=1)
         return schedule
@@ -142,9 +160,11 @@ def _refinanced_plan_loan(
 
 @dataclass(frozen=True, slots=True)
 class RefinancePlanQuery:
+    """A refinance of a saved plan from the `as_of` month on, today's month when `as_of` is omitted."""
+
     plan_id: uuid.UUID
     user_id: uuid.UUID
-    as_of: datetime.date
+    as_of: datetime.date | None
     new_rate: Decimal
     new_term_months: int
     closing_costs: Decimal
@@ -163,12 +183,12 @@ class RefinancePlanHandler:
 
     async def handle(self, query: RefinancePlanQuery) -> PlanRefinance:
         plan = await get_owned_plan(self._plan_repo, query.plan_id, query.user_id)
-        current = _plan_from_month(plan, query.as_of)
-        result = compare_refinance(
-            current=current.installments,
+        current = _remaining_plan(plan, query.as_of or today())
+        result = _compare_refinance(
+            current=current.periods,
             current_balance=current.snapshot.balance,
-            new_loan=_refinanced_plan_loan(plan, current.first_payment_date, query.new_rate, query.new_term_months),
-            new_start=current.first_payment_date,
+            new_loan=_refinanced_plan_loan(plan, current.first_period_start, query.new_rate, query.new_term_months),
+            new_start=current.first_period_start,
             closing_costs=query.closing_costs,
             roll_costs_into_loan=query.roll_costs_into_loan,
         )
@@ -205,7 +225,6 @@ class PrepayVsInvestPlanHandler:
             extra_monthly=query.extra_monthly,
             annual_return=query.annual_return,
         )
-        validate_prepay_vs_invest(data)
         return PlanPrepayVsInvest(
             principal=data.principal,
             interest_rate=data.interest_rate,
@@ -215,17 +234,19 @@ class PrepayVsInvestPlanHandler:
         )
 
 
-def prepay_vs_invest_on_terms(data: PrepayVsInvestInput, start_date: datetime.date) -> PrepayVsInvestResult:
-    """Prepay vs invest for entered terms, on engine schedules whose first period starts on `start_date`."""
-    validate_prepay_vs_invest(data)
+def prepay_vs_invest_on_terms(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
+    """Prepay vs invest for entered terms, on engine schedules whose first period starts on the 1st of next month."""
     return _prepay_vs_invest_on_schedules(
-        lambda: entered_terms_schedule(data.principal, data.interest_rate, data.term_months), data, start_date
+        lambda: entered_terms_schedule(data.principal, data.interest_rate, data.term_months),
+        data,
+        next_month(today().replace(day=1)),
     )
 
 
 def _prepay_vs_invest_on_schedules(
     build_baseline: Callable[[], AmortizationSchedule], data: PrepayVsInvestInput, start_date: datetime.date
 ) -> PrepayVsInvestResult:
+    validate_prepay_vs_invest(data)
     baseline = build_baseline()
     prepay = build_baseline()
     prepay.add_recurring_extra_payment(start_date, data.extra_monthly, count=data.term_months)

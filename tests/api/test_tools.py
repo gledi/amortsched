@@ -390,3 +390,32 @@ async def test_prepay_vs_invest_stacks_the_extra_on_a_plan_and_counts_its_penalt
     assert len(body["timeline"]) == baseline["months"]
     assert Decimal(body["invest_net_worth"]) == extras
     assert Decimal(body["prepay_net_worth"]) == baseline["total_outflow"] + extras - prepay["total_outflow"]
+
+
+@pytest.mark.anyio
+async def test_refinance_from_plan_reports_the_rate_of_the_first_kept_period(client, auth_headers):
+    created = await client.post(
+        "/api/plans",
+        json={
+            "name": "Rate change after as_of",
+            "amount": "100000",
+            "interest_rate": "5",
+            "term": {"years": 5},
+            "start_date": "2026-01-10",
+            "interest_rate_changes": [{"effective_date": "2026-07-05", "rate": "7"}],
+        },
+        headers=auth_headers,
+    )
+    plan_id = created.json()["id"]
+    schedule = (await client.post(f"/api/plans/{plan_id}/schedules", headers=auth_headers)).json()
+    july = next(row for row in schedule["installments"] if (row["year"], row["month"]) == (2026, 7))
+
+    response = await client.post(
+        "/api/tools/refinance",
+        json={"plan_id": plan_id, "as_of": "2026-07-01", "new_rate": "4", "new_term_months": 48},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert Decimal(body["current_payment"]) == Decimal(july["total"])
+    assert Decimal(body["current_loan"]["rate"]) == Decimal("7")

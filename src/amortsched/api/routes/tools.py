@@ -14,14 +14,12 @@ from amortsched.api.schemas.tools import (
 from amortsched.app.queries.tools import (
     PrepayVsInvestPlanQuery,
     RefinancePlanQuery,
-    compare_refinance,
-    entered_terms_schedule,
+    RefinanceTermsQuery,
     prepay_vs_invest_on_terms,
+    refinance_on_terms,
 )
-from amortsched.core.amortization import next_month
 from amortsched.core.calculators import PrepayVsInvestInput, affordability
 from amortsched.core.money import round_cents
-from amortsched.core.utils import today
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
@@ -37,7 +35,7 @@ async def run_refinance(body: RefinanceRequest, user_id: CurrentUserId, handler:
         query = RefinancePlanQuery(
             plan_id=body.plan_id,
             user_id=user_id,
-            as_of=body.as_of or today(),
+            as_of=body.as_of,
             new_rate=body.new_rate,
             new_term_months=body.new_term_months,
             closing_costs=body.closing_costs,
@@ -54,15 +52,17 @@ async def run_refinance(body: RefinanceRequest, user_id: CurrentUserId, handler:
         return RefinanceResponse.from_result(current, outcome.result)
 
     assert body.current_balance is not None and body.current_rate is not None and body.remaining_months is not None
-    as_of = body.as_of or today()
-    current_schedule = entered_terms_schedule(body.current_balance, body.current_rate, body.remaining_months)
-    result = compare_refinance(
-        current=current_schedule.generate(as_of),
-        current_balance=body.current_balance,
-        new_loan=lambda principal: entered_terms_schedule(principal, body.new_rate, body.new_term_months),
-        new_start=as_of,
-        closing_costs=body.closing_costs,
-        roll_costs_into_loan=body.roll_costs_into_loan,
+    result = refinance_on_terms(
+        RefinanceTermsQuery(
+            as_of=body.as_of,
+            current_balance=body.current_balance,
+            current_rate=body.current_rate,
+            remaining_months=body.remaining_months,
+            new_rate=body.new_rate,
+            new_term_months=body.new_term_months,
+            closing_costs=body.closing_costs,
+            roll_costs_into_loan=body.roll_costs_into_loan,
+        )
     )
     current = CurrentLoanResponse(
         balance=body.current_balance,
@@ -109,5 +109,4 @@ async def run_prepay_vs_invest(
         term_months=data.term_months,
         currency=None,
     )
-    result = prepay_vs_invest_on_terms(data, start_date=next_month(today().replace(day=1)))
-    return PrepayVsInvestResponse.from_result(loan, result)
+    return PrepayVsInvestResponse.from_result(loan, prepay_vs_invest_on_terms(data))
