@@ -189,8 +189,8 @@ class Plan:
 
     @property
     def monthly_payment(self) -> Decimal:
-        """Scheduled principal and interest at the plan's starting rate."""
-        return self.to_schedule().monthly_installment
+        """Scheduled principal and interest for period 1, at the rate in effect on the start date."""
+        return self.to_schedule().starting_payment(self.start_date)
 
     @property
     def starting_housing_payment(self) -> HousingPayment | None:
