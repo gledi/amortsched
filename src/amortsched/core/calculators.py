@@ -1,7 +1,8 @@
-"""Decision calculators over plain monthly amortization.
+"""Decision Tools that answer what-if questions about a loan.
 
-These model a loan's base terms (fixed rate, level payment, payments at month end) to answer
-what-if questions. Plan schedules with dated adjustments come from `amortization.py` instead.
+Refinance and prepay-vs-invest compare `PeriodRow`s grouped from schedule-engine installments, so
+they see the same payments, rate changes, extras and fees as the plan itself. Affordability works
+from the level-payment formula alone.
 """
 
 from collections.abc import Iterable, Sequence
@@ -11,52 +12,10 @@ from enum import StrEnum
 
 from amortsched.core.errors import ValidationError
 from amortsched.core.money import CENT, HUNDRED, ZERO, floor_units, round_cents, round_percent
-from amortsched.core.payments import TWELVE, monthly_payment, monthly_rate, payment_factor
+from amortsched.core.payments import TWELVE, monthly_payment, payment_factor
 from amortsched.core.values import Installment
 
 MAX_MONTHS = 600
-
-
-@dataclass(frozen=True, slots=True)
-class AmortizationMonth:
-    month: int
-    payment: Decimal
-    interest: Decimal
-    principal: Decimal
-    extra: Decimal
-    balance: Decimal
-
-
-def amortize(
-    principal: Decimal,
-    annual_rate_percent: Decimal,
-    months: int,
-    extra_monthly: Decimal = ZERO,
-) -> list[AmortizationMonth]:
-    """Level-payment schedule; any extra goes to principal after each scheduled payment."""
-    rate = monthly_rate(annual_rate_percent)
-    payment = monthly_payment(principal, annual_rate_percent, months)
-    balance = principal
-    rows: list[AmortizationMonth] = []
-    for month in range(1, months + 1):
-        if balance <= 0:
-            break
-        interest = round_cents(balance * rate)
-        scheduled_principal = min(payment - interest, balance) if month < months else balance
-        balance -= scheduled_principal
-        extra = min(extra_monthly, balance)
-        balance -= extra
-        rows.append(
-            AmortizationMonth(
-                month=month,
-                payment=scheduled_principal + interest,
-                interest=interest,
-                principal=scheduled_principal,
-                extra=extra,
-                balance=balance,
-            )
-        )
-    return rows
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -102,20 +61,6 @@ def _merge_period(installments: list[Installment]) -> PeriodRow:
         principal=sum((payment.principal for payment in payments), ZERO),
         balance=installments[-1].balance.after,
     )
-
-
-def _month_periods(months: list[AmortizationMonth]) -> list[PeriodRow]:
-    return [
-        PeriodRow(
-            outflow=row.payment + row.extra,
-            scheduled_payment=row.payment,
-            interest=row.interest,
-            fees=ZERO,
-            principal=row.principal + row.extra,
-            balance=row.balance,
-        )
-        for row in months
-    ]
 
 
 def _require(errors: list[dict[str, str]], condition: bool, field: str, message: str) -> None:
@@ -252,17 +197,6 @@ def affordability(data: AffordabilityInput) -> AffordabilityResult:
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
-class RefinanceInput:
-    current_balance: Decimal
-    current_rate: Decimal
-    remaining_months: int
-    new_rate: Decimal
-    new_term_months: int
-    closing_costs: Decimal = ZERO
-    roll_costs_into_loan: bool = False
-
-
-@dataclass(frozen=True, kw_only=True, slots=True)
 class RefinanceResult:
     current_payment: Decimal
     new_payment: Decimal
@@ -276,25 +210,6 @@ class RefinanceResult:
     lifetime_savings: Decimal
     break_even_month: int | None
     advantage_by_month: tuple[Decimal, ...]
-
-
-def refinance(data: RefinanceInput) -> RefinanceResult:
-    errors: list[dict[str, str]] = []
-    _require(errors, data.current_balance > 0, "current_balance", "Balance must be positive")
-    _require(errors, data.closing_costs >= 0, "closing_costs", "Closing costs must be zero or greater")
-    _validate_loan(errors, "current_", data.current_rate, data.remaining_months)
-    _validate_loan(errors, "new_", data.new_rate, data.new_term_months)
-    if errors:
-        raise ValidationError(errors)
-
-    new_principal = data.current_balance + (data.closing_costs if data.roll_costs_into_loan else ZERO)
-    return refinance_from_periods(
-        current=_month_periods(amortize(data.current_balance, data.current_rate, data.remaining_months)),
-        current_balance=data.current_balance,
-        new=_month_periods(amortize(new_principal, data.new_rate, data.new_term_months)),
-        new_principal=new_principal,
-        cash_due=ZERO if data.roll_costs_into_loan else data.closing_costs,
-    )
 
 
 def refinance_from_periods(
@@ -449,17 +364,6 @@ def validate_prepay_vs_invest(data: PrepayVsInvestInput) -> None:
     _validate_loan(errors, "interest_", data.interest_rate, data.term_months)
     if errors:
         raise ValidationError(errors)
-
-
-def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
-    validate_prepay_vs_invest(data)
-    return prepay_vs_invest_from_periods(
-        baseline=_month_periods(amortize(data.principal, data.interest_rate, data.term_months)),
-        prepay=_month_periods(amortize(data.principal, data.interest_rate, data.term_months, data.extra_monthly)),
-        regular_payment=monthly_payment(data.principal, data.interest_rate, data.term_months),
-        extra_monthly=data.extra_monthly,
-        annual_return=data.annual_return,
-    )
 
 
 def prepay_vs_invest_from_periods(

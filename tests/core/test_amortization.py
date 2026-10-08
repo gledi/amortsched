@@ -4,7 +4,6 @@ from decimal import Decimal
 import pytest
 
 from amortsched.core.amortization import AmortizationSchedule
-from amortsched.core.calculators import amortize
 from amortsched.core.errors import InvalidTermError
 from amortsched.core.values import EarlyPaymentFees, InterestRateApplication, Term
 
@@ -335,25 +334,6 @@ def test_every_row_is_whole_cents_and_rows_sum_to_totals(mode):
     assert sum(inst.payment.principal for inst in installments) == totals.principal
     assert sum(inst.payment.interest for inst in installments) == totals.interest
     assert sum(inst.payment.fees for inst in installments) == totals.fees
-
-
-@pytest.mark.parametrize(
-    ("amount", "rate", "years"),
-    [
-        (Decimal("162000"), Decimal("3.875"), 30),
-        (Decimal("25000"), Decimal("7.49"), 5),
-        (Decimal("9000"), Decimal("0"), 3),
-    ],
-)
-def test_plan_schedule_matches_decision_tool_schedule_to_the_cent(amount, rate, years):
-    schedule = AmortizationSchedule(amount=amount, term=Term(years), interest_rate=rate)
-    engine_rows = [
-        (inst.payment.total, inst.payment.interest, inst.payment.principal, inst.balance.after)
-        for inst in schedule.generate(datetime.date(2025, 1, 1))
-    ]
-    tool_rows = [(row.payment, row.interest, row.principal, row.balance) for row in amortize(amount, rate, years * 12)]
-
-    assert engine_rows == tool_rows
 
 
 def test_extra_payment_payoff_row_carries_the_period_interest():

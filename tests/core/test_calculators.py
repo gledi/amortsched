@@ -8,17 +8,12 @@ from amortsched.core.calculators import (
     AffordabilityInput,
     LimitingRatio,
     PeriodRow,
-    PrepayVsInvestInput,
     PrepayVsInvestResult,
-    RefinanceInput,
     RefinanceResult,
     Strategy,
     affordability,
-    amortize,
     period_rows,
-    prepay_vs_invest,
     prepay_vs_invest_from_periods,
-    refinance,
     refinance_from_periods,
 )
 from amortsched.core.errors import ValidationError
@@ -35,17 +30,6 @@ def close(a: Decimal, b: Decimal, tolerance: str = "0.01") -> bool:
 def test_level_payment_matches_standard_formula():
     assert close(level_payment(D(200000), D("6.5"), 360), D("1264.14"))
     assert level_payment(D(1200), D(0), 12) == D(100)
-
-
-def test_amortize_pays_off_exactly_and_extra_shortens_term():
-    plain = amortize(D(100000), D(5), 120)
-    assert len(plain) == 120
-    assert plain[-1].balance == 0
-
-    faster = amortize(D(100000), D(5), 120, extra_monthly=D(500))
-    assert faster[-1].balance == 0
-    assert len(faster) < 120
-    assert sum(row.interest for row in faster) < sum(row.interest for row in plain)
 
 
 def base_affordability(**overrides) -> AffordabilityInput:
@@ -211,16 +195,6 @@ def test_prepay_invests_the_baseline_outflow_plus_extra_left_over_each_period():
     assert result.better_strategy is Strategy.Prepay
 
 
-def prepay_input(annual_return: str) -> PrepayVsInvestInput:
-    return PrepayVsInvestInput(
-        principal=D(200000),
-        interest_rate=D(6),
-        term_months=360,
-        extra_monthly=D(300),
-        annual_return=D(annual_return),
-    )
-
-
 def test_prepaying_wins_when_returns_are_below_the_loan_rate():
     result = prepay_on_engine("200000", "6", 360, "300", "3")
     assert result.better_strategy is Strategy.Prepay
@@ -256,35 +230,26 @@ def test_level_payment_stays_unrounded():
     assert level_payment(D(200000), D("7.5"), 180) == pytest.approx(D("1854.0247200054619"), abs=D("1e-9"))
 
 
-def test_amortize_payment_matches_published_pmt_example():
-    assert amortize(D(10000), D(8), 10)[0].payment == D("1037.03")
+def engine_rows(schedule: AmortizationSchedule) -> list[PeriodRow]:
+    return period_rows(schedule.generate(datetime.date(2026, 1, 1)))
 
 
-def test_amortize_rows_are_whole_cents_and_end_at_zero():
-    rows = amortize(D(200000), D("7.5"), 180, extra_monthly=D(100))
-    for row in rows:
-        for amount in (row.payment, row.interest, row.principal, row.extra, row.balance):
-            assert amount == amount.quantize(D("0.01"))
-    assert rows[-1].balance == 0
+def test_engine_payment_matches_published_pmt_example():
+    schedule = AmortizationSchedule(D(10000), (0, 10), D(8))
+    assert schedule.starting_payment(datetime.date(2026, 1, 1)) == D("1037.03")
 
 
 def test_refinance_and_prepay_money_is_whole_cents():
-    refi = refinance(
-        RefinanceInput(
-            current_balance=D(300000),
-            current_rate=D("7.125"),
-            remaining_months=300,
-            new_rate=D("5.5"),
-            new_term_months=300,
-        )
+    refi = refinance_from_periods(
+        current=engine_rows(AmortizationSchedule(D(300000), (0, 300), D("7.125"))),
+        current_balance=D(300000),
+        new=engine_rows(AmortizationSchedule(D(300000), (0, 300), D("5.5"))),
+        new_principal=D(300000),
+        cash_due=D(0),
     )
     for amount in (refi.current_payment, refi.new_payment, refi.current_total_interest, refi.new_total_paid):
         assert amount == amount.quantize(D("0.01"))
-    assert prepay_vs_invest(prepay_input("3")).regular_payment == D("1199.10")
-
-
-def engine_rows(schedule: AmortizationSchedule) -> list[PeriodRow]:
-    return period_rows(schedule.generate(datetime.date(2026, 1, 1)))
+    assert prepay_on_engine("200000", "6", 360, "300", "3").regular_payment == D("1199.10")
 
 
 def test_refinance_from_engine_merges_extra_rows_counts_an_extra_only_final_period_and_reports_the_scheduled_payment():
