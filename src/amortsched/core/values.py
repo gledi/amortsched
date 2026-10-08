@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from amortsched.core.errors import InvalidTermError, ValidationError
-from amortsched.core.money import round_cents
+from amortsched.core.money import HUNDRED, ZERO, round_cents
 
 type Amount = int | float | Decimal
 type TermType = int | tuple[int, int] | Term
@@ -42,15 +42,15 @@ class Month(enum.IntEnum):
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class EarlyPaymentFees:
-    fixed: Amount = Decimal("0.00")
-    percent: Amount = Decimal("0.00")
+    fixed: Amount = ZERO
+    percent: Amount = ZERO
 
     def __post_init__(self) -> None:
         fixed = self.fixed if isinstance(self.fixed, Decimal) else Decimal(self.fixed)
         percent = self.percent if isinstance(self.percent, Decimal) else Decimal(self.percent)
-        if fixed < Decimal("0.00"):
+        if fixed < ZERO:
             raise ValueError("Early payment fixed fee cannot be negative")
-        if percent < Decimal("0.00") or percent > Decimal("100.00"):
+        if percent < ZERO or percent > HUNDRED:
             raise ValueError("Early payment percent fee must be between 0 and 100")
 
     def penalty(self, amount: Amount) -> Decimal:
@@ -58,13 +58,13 @@ class EarlyPaymentFees:
         percent = self.percent if isinstance(self.percent, Decimal) else Decimal(self.percent)
 
         amount = amount if isinstance(amount, Decimal) else Decimal(amount)
-        percent_fee = amount * (percent / Decimal("100.00"))
+        percent_fee = amount * (percent / HUNDRED)
         return round_cents(fixed + percent_fee)
 
     def principal(self, amount: Amount) -> Decimal:
         amount = amount if isinstance(amount, Decimal) else Decimal(amount)
         penalty = self.penalty(amount)
-        return max(Decimal("0.00"), amount - penalty)
+        return max(ZERO, amount - penalty)
 
 
 class LoanType(enum.StrEnum):
@@ -96,10 +96,10 @@ class HousingCosts:
     """Ownership costs paid alongside a mortgage. Only PMI is a cost of the loan itself."""
 
     property_value: Decimal | None = None
-    property_tax_annual: Decimal = Decimal("0.00")
-    insurance_annual: Decimal = Decimal("0.00")
-    hoa_monthly: Decimal = Decimal("0.00")
-    pmi_annual_rate: Decimal = Decimal("0.00")
+    property_tax_annual: Decimal = ZERO
+    insurance_annual: Decimal = ZERO
+    hoa_monthly: Decimal = ZERO
+    pmi_annual_rate: Decimal = ZERO
     pmi_cancel_ltv: Decimal = Decimal("78")
 
     def __post_init__(self) -> None:
@@ -111,7 +111,7 @@ class HousingCosts:
                 errors.append({"field": f"housing_costs.{name}", "message": "Must be zero or greater"})
         if self.pmi_annual_rate > 100:
             errors.append({"field": "housing_costs.pmi_annual_rate", "message": "PMI rate must be at most 100%"})
-        if not Decimal("0") < self.pmi_cancel_ltv <= Decimal("100"):
+        if not ZERO < self.pmi_cancel_ltv <= HUNDRED:
             errors.append({"field": "housing_costs.pmi_cancel_ltv", "message": "PMI cancellation LTV must be 0-100%"})
         if self.pmi_annual_rate > 0 and self.property_value is None:
             errors.append({"field": "housing_costs.property_value", "message": "PMI requires a property value"})
@@ -135,7 +135,7 @@ class HousingCosts:
     def ltv_percent(self, balance: Decimal) -> Decimal | None:
         if self.property_value is None:
             return None
-        return balance / self.property_value * Decimal("100")
+        return balance / self.property_value * HUNDRED
 
     def pmi_applies(self, balance: Decimal) -> bool:
         ltv = self.ltv_percent(balance)
@@ -144,10 +144,10 @@ class HousingCosts:
     def down_payment(self, loan_amount: Decimal) -> Decimal | None:
         if self.property_value is None:
             return None
-        return max(Decimal("0.00"), self.property_value - loan_amount)
+        return max(ZERO, self.property_value - loan_amount)
 
     def monthly_payment(self, *, loan_amount: Decimal, pmi_active: bool) -> HousingPayment:
-        pmi = loan_amount * self.pmi_annual_rate / Decimal("100") / Decimal("12") if pmi_active else Decimal("0.00")
+        pmi = loan_amount * self.pmi_annual_rate / HUNDRED / Decimal("12") if pmi_active else ZERO
         return HousingPayment(
             property_tax=self.property_tax_annual / Decimal("12"),
             insurance=self.insurance_annual / Decimal("12"),
@@ -194,8 +194,8 @@ class ScheduleTotals:
     fees: Decimal
     months: int
     paid_off: bool
-    pmi: Decimal = Decimal("0.00")
-    escrow: Decimal = Decimal("0.00")
+    pmi: Decimal = ZERO
+    escrow: Decimal = ZERO
 
     @property
     def total_outflow(self) -> Decimal:

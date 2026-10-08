@@ -4,9 +4,9 @@ from collections.abc import Generator
 from decimal import Decimal
 from typing import override
 
-from amortsched.core.calculators import monthly_payment
 from amortsched.core.errors import AmortizationError, InvalidExtraPaymentError, InvalidRecurringPaymentError
-from amortsched.core.money import round_cents
+from amortsched.core.money import HUNDRED, ZERO, round_cents
+from amortsched.core.payments import monthly_payment
 from amortsched.core.values import (
     DAYS_IN_YEAR,
     Amount,
@@ -77,7 +77,7 @@ class AmortizationSchedule:
 
     @property
     def yearly_interest_rate(self) -> Decimal:
-        return self.interest_rate / Decimal("100.00")
+        return self.interest_rate / HUNDRED
 
     @property
     def monthly_interest_rate(self) -> Decimal:
@@ -202,7 +202,7 @@ class AmortizationSchedule:
         requested_amount: Decimal,
         balance: Decimal,
     ) -> tuple[Installment | None, Decimal]:
-        if balance <= Decimal("0.00"):
+        if balance <= ZERO:
             return None, balance
 
         payment_amount = min(requested_amount, balance)
@@ -213,7 +213,7 @@ class AmortizationSchedule:
         principal = self.early_payment_fees.principal(payment_amount)
         before = balance
         after = before - principal
-        extra_payment = Payment(kind=kind, principal=principal, interest=Decimal("0.00"), fees=penalty)
+        extra_payment = Payment(kind=kind, principal=principal, interest=ZERO, fees=penalty)
         row = Installment(
             i=None,
             year=dt.year,
@@ -238,7 +238,7 @@ class AmortizationSchedule:
             scheduled_month=period_start.month,
         )
 
-    def _days_in_year(self, *, period_start: datetime.date, period_end: datetime.date) -> Decimal:
+    def _interest_day_basis(self, *, period_start: datetime.date, period_end: datetime.date) -> Decimal:
         if self.interest_rate_application == InterestRateApplication.WholeMonth:
             return Decimal(12 * (period_end - period_start).days)
         return DAYS_IN_YEAR
@@ -260,7 +260,7 @@ class AmortizationSchedule:
         segment_starts.append(period_end)
 
         installments: list[Installment] = []
-        interest_percent_days = Decimal("0.00")
+        interest_numerator = ZERO
         for i in range(len(segment_starts) - 1):
             segment_start = segment_starts[i]
             segment_end = segment_starts[i + 1]
@@ -268,7 +268,7 @@ class AmortizationSchedule:
             if days <= 0:
                 continue
             rate = self._yearly_rate_percent_for_segment(period_start=period_start, segment_start=segment_start)
-            interest_percent_days += balance * rate * days
+            interest_numerator += balance * rate * days
 
             if segment_start in extras_by_date:
                 for kind, amount in extras_by_date[segment_start]:
@@ -291,8 +291,8 @@ class AmortizationSchedule:
             if extra_row:
                 installments.append(extra_row)
 
-        days_in_year = self._days_in_year(period_start=period_start, period_end=period_end)
-        interest = round_cents(interest_percent_days / (Decimal("100") * days_in_year))
+        day_basis = self._interest_day_basis(period_start=period_start, period_end=period_end)
+        interest = round_cents(interest_numerator / (HUNDRED * day_basis))
         return installments, balance, interest
 
     def _validate_one_time_extra_payment(self, date: datetime.date, amount: Decimal) -> None:
@@ -320,9 +320,9 @@ class AmortizationSchedule:
         date = start_date
         base_day = start_date.day
         scheduled_payment_index = 0
-        total_principal = Decimal("0.00")
-        total_interest = Decimal("0.00")
-        total_fees = Decimal("0.00")
+        total_principal = ZERO
+        total_interest = ZERO
+        total_fees = ZERO
         paid_off = False
         payment_rate = self._yearly_rate_percent_for_date(start_date)
         scheduled_amount = self.starting_payment(start_date)
@@ -346,7 +346,7 @@ class AmortizationSchedule:
                 total_fees += extra.payment.fees
                 yield extra
 
-            if balance <= Decimal("0.00"):
+            if balance <= ZERO:
                 total_interest += accrued_interest
                 paid_off = True
                 break
@@ -361,15 +361,15 @@ class AmortizationSchedule:
                 kind=PaymentKind.ScheduledPayment,
                 principal=principal,
                 interest=accrued_interest,
-                fees=Decimal("0.00"),
+                fees=ZERO,
             )
             before = balance
             balance = before - scheduled.principal
-            after = max(balance, Decimal("0.00"))
+            after = max(balance, ZERO)
 
-            if balance <= Decimal("0.00"):
+            if balance <= ZERO:
                 scheduled.principal = before
-                balance = Decimal("0.00")
+                balance = ZERO
                 paid_off = True
 
             total_principal += scheduled.principal

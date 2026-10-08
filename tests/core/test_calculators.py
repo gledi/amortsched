@@ -10,11 +10,11 @@ from amortsched.core.calculators import (
     Strategy,
     affordability,
     amortize,
-    level_payment,
     prepay_vs_invest,
     refinance,
 )
 from amortsched.core.errors import ValidationError
+from amortsched.core.payments import level_payment
 
 D = Decimal
 

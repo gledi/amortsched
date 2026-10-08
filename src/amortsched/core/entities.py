@@ -19,6 +19,7 @@ from amortsched.core.errors import (
     UserAssociationError,
 )
 from amortsched.core.housing import apply_housing_costs
+from amortsched.core.money import ZERO
 from amortsched.core.utils import now
 from amortsched.core.values import (
     DEFAULT_CURRENCY,
@@ -113,7 +114,7 @@ class Plan:
     loan_type: LoanType = LoanType.Other
     currency: str = DEFAULT_CURRENCY
     lender: str | None = None
-    upfront_fees: Decimal = Decimal("0.00")
+    upfront_fees: Decimal = ZERO
     housing_costs: HousingCosts = field(default_factory=HousingCosts)
     early_payment_fees: EarlyPaymentFees = field(default_factory=EarlyPaymentFees)
     interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth

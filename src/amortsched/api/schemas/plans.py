@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from amortsched.api.schemas.schedules import HousingPaymentSchema
 from amortsched.core.entities import Plan
-from amortsched.core.money import round_cents
+from amortsched.core.money import ZERO, round_cents, round_percent
 from amortsched.core.values import (
     HousingCosts,
     InterestRateApplication,
@@ -29,16 +29,16 @@ class TermSchema(BaseModel):
 
 
 class EarlyPaymentFeesSchema(BaseModel):
-    fixed: Decimal = Field(default=Decimal("0.00"), ge=0)
-    percent: Decimal = Field(default=Decimal("0.00"), ge=0, le=100)
+    fixed: Decimal = Field(default=ZERO, ge=0)
+    percent: Decimal = Field(default=ZERO, ge=0, le=100)
 
 
 class HousingCostsSchema(BaseModel):
     property_value: Decimal | None = Field(default=None, gt=0)
-    property_tax_annual: Decimal = Field(default=Decimal("0.00"), ge=0)
-    insurance_annual: Decimal = Field(default=Decimal("0.00"), ge=0)
-    hoa_monthly: Decimal = Field(default=Decimal("0.00"), ge=0)
-    pmi_annual_rate: Decimal = Field(default=Decimal("0.00"), ge=0, le=100)
+    property_tax_annual: Decimal = Field(default=ZERO, ge=0)
+    insurance_annual: Decimal = Field(default=ZERO, ge=0)
+    hoa_monthly: Decimal = Field(default=ZERO, ge=0)
+    pmi_annual_rate: Decimal = Field(default=ZERO, ge=0, le=100)
     pmi_cancel_ltv: Decimal = Field(default=Decimal("78"), gt=0, le=100)
 
     def to_value(self) -> HousingCosts:
@@ -105,7 +105,7 @@ class CreatePlanRequest(AdjustmentsSchema):
     loan_type: LoanType = LoanType.Other
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     lender: str | None = Field(default=None, max_length=200)
-    upfront_fees: Decimal = Field(default=Decimal("0.00"), ge=0)
+    upfront_fees: Decimal = Field(default=ZERO, ge=0)
     early_payment_fees: EarlyPaymentFeesSchema = Field(default_factory=EarlyPaymentFeesSchema)
     housing_costs: HousingCostsSchema | None = None
     interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth
@@ -194,7 +194,7 @@ class PlanResponse(BaseModel):
             ),
             housing_costs=HousingCostsSchema.from_value(plan.housing_costs),
             down_payment=plan.housing_costs.down_payment(plan.amount),
-            ltv=None if ltv is None else round_cents(ltv),
+            ltv=None if ltv is None else round_percent(ltv),
             monthly_payment=round_cents(plan.monthly_payment),
             monthly_housing=None if housing is None else HousingPaymentSchema.from_value(housing),
             interest_rate_application=plan.interest_rate_application.value,

@@ -5,7 +5,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 from amortsched.core.entities import Schedule
-from amortsched.core.money import round_cents
+from amortsched.core.money import ZERO, round_cents
 from amortsched.core.values import HousingPayment, Installment, ScheduleTotals
 
 
@@ -48,7 +48,7 @@ class InstallmentSchema(BaseModel):
 
     @classmethod
     def from_value(cls, inst: Installment) -> "InstallmentSchema":
-        housing_total = inst.housing.total if inst.housing is not None else Decimal("0")
+        housing_total = inst.housing.total if inst.housing is not None else ZERO
         return cls(
             installment_number=inst.i,
             year=inst.year,

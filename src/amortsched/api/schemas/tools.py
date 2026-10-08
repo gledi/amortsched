@@ -13,11 +13,7 @@ from amortsched.core.calculators import (
     RefinanceResult,
     Strategy,
 )
-from amortsched.core.money import round_cents
-
-
-def money(value: Decimal) -> Decimal:
-    return round_cents(value)
+from amortsched.core.money import round_cents, round_percent
 
 
 class AffordabilityRequest(BaseModel):
@@ -62,21 +58,23 @@ class AffordabilityResponse(BaseModel):
         monthly = result.monthly
         return cls(
             max_home_price=result.max_home_price,
-            max_loan_amount=money(result.max_loan_amount),
-            max_monthly_housing=money(result.max_monthly_housing),
+            max_loan_amount=round_cents(result.max_loan_amount),
+            max_monthly_housing=round_cents(result.max_monthly_housing),
             limiting_ratio=result.limiting_ratio,
             monthly=MonthlyHousingBreakdownResponse(
-                principal_interest=money(monthly.principal_interest),
-                property_tax=money(monthly.property_tax),
-                insurance=money(monthly.insurance),
-                hoa=money(monthly.hoa),
-                pmi=money(monthly.pmi),
-                total=money(monthly.total),
+                principal_interest=round_cents(monthly.principal_interest),
+                property_tax=round_cents(monthly.property_tax),
+                insurance=round_cents(monthly.insurance),
+                hoa=round_cents(monthly.hoa),
+                pmi=round_cents(monthly.pmi),
+                total=round_cents(monthly.total),
             ),
-            front_end_ratio=money(result.front_end_ratio),
-            back_end_ratio=money(result.back_end_ratio),
-            ltv=None if result.ltv is None else money(result.ltv),
-            down_payment_percent=None if result.down_payment_percent is None else money(result.down_payment_percent),
+            front_end_ratio=round_percent(result.front_end_ratio),
+            back_end_ratio=round_percent(result.back_end_ratio),
+            ltv=None if result.ltv is None else round_percent(result.ltv),
+            down_payment_percent=None
+            if result.down_payment_percent is None
+            else round_percent(result.down_payment_percent),
         )
 
 
@@ -125,16 +123,16 @@ class RefinanceResponse(BaseModel):
     def from_result(cls, current_loan: CurrentLoanResponse, result: RefinanceResult) -> "RefinanceResponse":
         return cls(
             current_loan=current_loan,
-            current_payment=money(result.current_payment),
-            new_payment=money(result.new_payment),
-            monthly_savings=money(result.monthly_savings),
-            new_principal=money(result.new_principal),
-            cash_due_at_closing=money(result.cash_due_at_closing),
-            current_total_interest=money(result.current_total_interest),
-            new_total_interest=money(result.new_total_interest),
-            current_total_paid=money(result.current_total_paid),
-            new_total_paid=money(result.new_total_paid),
-            lifetime_savings=money(result.lifetime_savings),
+            current_payment=round_cents(result.current_payment),
+            new_payment=round_cents(result.new_payment),
+            monthly_savings=round_cents(result.monthly_savings),
+            new_principal=round_cents(result.new_principal),
+            cash_due_at_closing=round_cents(result.cash_due_at_closing),
+            current_total_interest=round_cents(result.current_total_interest),
+            new_total_interest=round_cents(result.new_total_interest),
+            current_total_paid=round_cents(result.current_total_paid),
+            new_total_paid=round_cents(result.new_total_paid),
+            lifetime_savings=round_cents(result.lifetime_savings),
             break_even_month=result.break_even_month,
             advantage_by_month=list(result.advantage_by_month),
         )
@@ -188,19 +186,21 @@ class PrepayVsInvestResponse(BaseModel):
     def from_result(cls, loan: LoanTermsResponse, result: PrepayVsInvestResult) -> "PrepayVsInvestResponse":
         return cls(
             loan=loan,
-            regular_payment=money(result.regular_payment),
+            regular_payment=round_cents(result.regular_payment),
             payoff_months_with_prepayment=result.payoff_months_with_prepayment,
             months_saved=result.months_saved,
-            interest_without_prepayment=money(result.interest_without_prepayment),
-            interest_with_prepayment=money(result.interest_with_prepayment),
-            interest_saved=money(result.interest_saved),
-            prepay_net_worth=money(result.prepay_net_worth),
-            invest_net_worth=money(result.invest_net_worth),
-            advantage=money(result.advantage),
+            interest_without_prepayment=round_cents(result.interest_without_prepayment),
+            interest_with_prepayment=round_cents(result.interest_with_prepayment),
+            interest_saved=round_cents(result.interest_saved),
+            prepay_net_worth=round_cents(result.prepay_net_worth),
+            invest_net_worth=round_cents(result.invest_net_worth),
+            advantage=round_cents(result.advantage),
             better_strategy=result.better_strategy,
             break_even_return=result.break_even_return,
             timeline=[
-                NetWorthPointResponse(month=point.month, prepay=money(point.prepay), invest=money(point.invest))
+                NetWorthPointResponse(
+                    month=point.month, prepay=round_cents(point.prepay), invest=round_cents(point.invest)
+                )
                 for point in result.timeline
             ],
         )

@@ -42,7 +42,7 @@ from amortsched.app.commands.plans import (
 )
 from amortsched.app.queries.plans import GetPlanQuery, ListPlansQuery
 from amortsched.core.entities import Plan
-from amortsched.core.money import round_cents
+from amortsched.core.money import ZERO, round_cents
 from amortsched.core.utils import today
 from amortsched.core.values import EarlyPaymentFees, Term
 
@@ -252,7 +252,6 @@ def schedule_csv(plan: Plan) -> str:
     writer.writerow(CSV_COLUMNS)
     for inst in plan.generate().installments:
         housing = inst.housing
-        zero = Decimal("0")
         writer.writerow(
             [
                 "" if inst.i is None else inst.i,
@@ -262,11 +261,11 @@ def schedule_csv(plan: Plan) -> str:
                 _money(inst.payment.interest),
                 _money(inst.payment.fees),
                 _money(inst.payment.total),
-                _money(housing.property_tax if housing else zero),
-                _money(housing.insurance if housing else zero),
-                _money(housing.hoa if housing else zero),
-                _money(housing.pmi if housing else zero),
-                _money(inst.payment.total + (housing.total if housing else zero)),
+                _money(housing.property_tax if housing else ZERO),
+                _money(housing.insurance if housing else ZERO),
+                _money(housing.hoa if housing else ZERO),
+                _money(housing.pmi if housing else ZERO),
+                _money(inst.payment.total + (housing.total if housing else ZERO)),
                 _money(inst.balance.before),
                 _money(inst.balance.after),
             ]

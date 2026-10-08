@@ -7,7 +7,7 @@ from types import MappingProxyType
 
 from amortsched.core.entities import Plan, Schedule
 from amortsched.core.errors import PlanNotFoundError, ValidationError
-from amortsched.core.money import round_cents
+from amortsched.core.money import ZERO, round_cents, round_percent
 from amortsched.core.repositories import AsyncRepository
 from amortsched.core.specifications import Eq, In
 from amortsched.core.values import EarlyPaymentFees, LoanType, Term
@@ -170,7 +170,7 @@ class ComparePlansHandler:
         last_installment = schedule.installments[-1]
         schedule_total_outflow = totals.total_outflow
         total_cost = schedule_total_outflow + plan.upfront_fees + totals.pmi
-        starting_housing = first_scheduled.housing.total if first_scheduled.housing is not None else Decimal("0.00")
+        starting_housing = first_scheduled.housing.total if first_scheduled.housing is not None else ZERO
         ltv = plan.housing_costs.ltv_percent(plan.amount)
         finance_cost = plan.upfront_fees + totals.interest + totals.fees + totals.pmi
         cumulative_cost, balances = _cost_timeline(schedule, plan.upfront_fees, finance_cost, totals.paid_off)
@@ -178,7 +178,7 @@ class ComparePlansHandler:
         if horizon_months is not None:
             month = min(horizon_months, len(cumulative_cost) - 1)
             balance = balances[month]
-            penalty = plan.early_payment_fees.penalty(balance) if balance > 0 else Decimal("0.00")
+            penalty = plan.early_payment_fees.penalty(balance) if balance > 0 else ZERO
             horizon = HorizonCost(
                 months=horizon_months,
                 cost=round_cents(cumulative_cost[month] + penalty),
@@ -200,7 +200,7 @@ class ComparePlansHandler:
             starting_monthly_housing=starting_housing,
             starting_total_monthly_payment=first_scheduled.payment.total + starting_housing,
             down_payment=plan.housing_costs.down_payment(plan.amount),
-            ltv=None if ltv is None else round_cents(ltv),
+            ltv=None if ltv is None else round_percent(ltv),
             configured_early_payment_fees=EarlyPaymentFees(
                 fixed=plan.early_payment_fees.fixed,
                 percent=plan.early_payment_fees.percent,
@@ -237,12 +237,12 @@ def _cost_timeline(
 
     Index 0 is loan signing, where only upfront fees have been paid.
     """
-    plan_amount = schedule.installments[0].balance.before if schedule.installments else Decimal("0.00")
+    plan_amount = schedule.installments[0].balance.before if schedule.installments else ZERO
     running = upfront_fees
     costs = [round_cents(running)]
     balances = [plan_amount]
     for installment in schedule.installments:
-        pmi = installment.housing.pmi if installment.housing is not None else Decimal("0.00")
+        pmi = installment.housing.pmi if installment.housing is not None else ZERO
         running += installment.payment.interest + installment.payment.fees + pmi
         if installment.i is not None:
             costs.append(round_cents(running))
@@ -250,5 +250,5 @@ def _cost_timeline(
     final_cost = round_cents(finance_cost)
     if costs[-1] != final_cost or (paid_off and balances[-1] > 0):
         costs.append(final_cost)
-        balances.append(Decimal("0.00"))
+        balances.append(ZERO)
     return tuple(costs), tuple(balances)

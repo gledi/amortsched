@@ -10,7 +10,6 @@ from amortsched.api.schemas.tools import (
     PrepayVsInvestResponse,
     RefinanceRequest,
     RefinanceResponse,
-    money,
 )
 from amortsched.app.queries.tools import PrepayVsInvestPlanQuery, RefinancePlanQuery
 from amortsched.core.calculators import (
@@ -20,6 +19,7 @@ from amortsched.core.calculators import (
     prepay_vs_invest,
     refinance,
 )
+from amortsched.core.money import round_cents
 from amortsched.core.utils import today
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
@@ -45,7 +45,7 @@ async def run_refinance(body: RefinanceRequest, user_id: CurrentUserId, handler:
         outcome = await handler.handle(query)
         snapshot = outcome.snapshot
         current = CurrentLoanResponse(
-            balance=money(snapshot.balance),
+            balance=round_cents(snapshot.balance),
             rate=snapshot.rate,
             remaining_months=snapshot.remaining_months,
             currency=snapshot.currency,
