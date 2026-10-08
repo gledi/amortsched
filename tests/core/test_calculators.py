@@ -182,20 +182,13 @@ def prepay_on_engine(principal: str, rate: str, months: int, extra: str, annual_
 
 def test_prepay_invests_the_baseline_outflow_plus_extra_left_over_each_period():
     result = prepay_on_engine("1000", "12", 4, "100", "0")
-    baseline_outflows = [D("256.28"), D("256.28"), D("256.28"), D("256.29")]
-    prepay_outflows = [D("356.28"), D("356.28"), D("307.02")]
-    leftovers = [D(0), D(0), D("49.26"), D("356.29")]
-    assert leftovers == [
-        baseline + D(100) - prepay for baseline, prepay in zip(baseline_outflows, [*prepay_outflows, D(0)], strict=True)
-    ]
-
     assert result.regular_payment == D("256.28")
     assert result.payoff_months_with_prepayment == 3
     assert result.months_saved == 1
     assert result.interest_without_prepayment == D("25.13")
     assert result.interest_with_prepayment == D("19.58")
     assert [point.prepay for point in result.timeline] == [D("-653.72"), D("-303.98"), D("49.26"), D("405.55")]
-    assert result.prepay_net_worth == sum(leftovers)
+    assert result.prepay_net_worth == D("405.55")
     assert [point.invest for point in result.timeline] == [D("-653.72"), D("-304.98"), D("46.25"), D("400")]
     assert result.advantage == result.interest_saved == D("5.55")
     assert result.better_strategy is Strategy.Prepay
