@@ -74,8 +74,12 @@ class RefinanceTermsQuery:
     roll_costs_into_loan: bool
 
 
+def _as_of_or_today(as_of: datetime.date | None) -> datetime.date:
+    return as_of or today()
+
+
 def refinance_on_terms(query: RefinanceTermsQuery) -> RefinanceResult:
-    as_of = query.as_of or today()
+    as_of = _as_of_or_today(query.as_of)
     current = entered_terms_schedule(query.current_balance, query.current_rate, query.remaining_months)
     return _compare_refinance(
         current=period_rows(current.generate(as_of)),
@@ -183,7 +187,7 @@ class RefinancePlanHandler:
 
     async def handle(self, query: RefinancePlanQuery) -> PlanRefinance:
         plan = await get_owned_plan(self._plan_repo, query.plan_id, query.user_id)
-        current = _remaining_plan(plan, query.as_of or today())
+        current = _remaining_plan(plan, _as_of_or_today(query.as_of))
         result = _compare_refinance(
             current=current.periods,
             current_balance=current.snapshot.balance,

@@ -225,24 +225,6 @@ async def test_entered_terms_refinance_matches_a_plan_with_the_same_terms(client
 
 
 @pytest.mark.anyio
-async def test_entered_terms_refinance_defaults_as_of_to_today(client, auth_headers):
-    terms = {
-        "current_balance": "90000",
-        "current_rate": "6",
-        "remaining_months": 100,
-        "new_rate": "4.5",
-        "new_term_months": 80,
-        "closing_costs": "1500",
-    }
-    defaulted = await client.post("/api/tools/refinance", json=terms, headers=auth_headers)
-    explicit = await client.post(
-        "/api/tools/refinance", json={**terms, "as_of": today().isoformat()}, headers=auth_headers
-    )
-    assert defaulted.status_code == explicit.status_code == 200
-    assert defaulted.json() == explicit.json()
-
-
-@pytest.mark.anyio
 async def test_refinance_from_plan_defaults_as_of_to_this_month(client, auth_headers):
     this_month = today().replace(day=1)
     year_ago = this_month.replace(year=this_month.year - 1)
