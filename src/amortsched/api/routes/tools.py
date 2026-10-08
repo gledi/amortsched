@@ -14,17 +14,13 @@ from amortsched.api.schemas.tools import (
 from amortsched.app.queries.tools import (
     PrepayVsInvestPlanQuery,
     RefinancePlanQuery,
+    compare_refinance,
     entered_terms_schedule,
     prepay_vs_invest_on_terms,
 )
 from amortsched.core.amortization import next_month
-from amortsched.core.calculators import (
-    PrepayVsInvestInput,
-    affordability,
-    period_rows,
-    refinance_from_periods,
-)
-from amortsched.core.money import ZERO, round_cents
+from amortsched.core.calculators import PrepayVsInvestInput, affordability
+from amortsched.core.money import round_cents
 from amortsched.core.utils import today
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
@@ -59,15 +55,14 @@ async def run_refinance(body: RefinanceRequest, user_id: CurrentUserId, handler:
 
     assert body.current_balance is not None and body.current_rate is not None and body.remaining_months is not None
     as_of = body.as_of or today()
-    new_principal = body.current_balance + (body.closing_costs if body.roll_costs_into_loan else ZERO)
     current_schedule = entered_terms_schedule(body.current_balance, body.current_rate, body.remaining_months)
-    new_schedule = entered_terms_schedule(new_principal, body.new_rate, body.new_term_months)
-    result = refinance_from_periods(
-        current=period_rows(current_schedule.generate(as_of)),
+    result = compare_refinance(
+        current=current_schedule.generate(as_of),
         current_balance=body.current_balance,
-        new=period_rows(new_schedule.generate(as_of)),
-        new_principal=new_principal,
-        cash_due=ZERO if body.roll_costs_into_loan else body.closing_costs,
+        new_loan=lambda principal: entered_terms_schedule(principal, body.new_rate, body.new_term_months),
+        new_start=as_of,
+        closing_costs=body.closing_costs,
+        roll_costs_into_loan=body.roll_costs_into_loan,
     )
     current = CurrentLoanResponse(
         balance=body.current_balance,

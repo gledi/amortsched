@@ -205,6 +205,92 @@ async def test_entered_terms_refinance_matches_a_plan_with_the_same_terms(client
     assert Decimal(body["current_total_paid"]) == Decimal(schedule["totals"]["total_outflow"])
 
 
+VARIABLE_RATE_PLAN = {
+    "name": "Variable",
+    "amount": "100000",
+    "interest_rate": "5",
+    "term": {"years": 5},
+    "start_date": "2026-01-10",
+    "upfront_fees": "3000",
+    "interest_rate_application": "prorated_by_payment_period",
+    "early_payment_fees": {"fixed": "25", "percent": "1"},
+    "interest_rate_changes": [{"effective_date": "2027-01-25", "rate": "7"}],
+    "one_time_extra_payments": [
+        {"date": "2026-04-05", "amount": "5000"},
+        {"date": "2028-03-05", "amount": "1000"},
+    ],
+    "recurring_extra_payments": [{"start_date": "2026-02-05", "amount": "200", "count": 24}],
+}
+
+
+@pytest.mark.anyio
+async def test_refinance_from_plan_keeps_the_plans_own_schedule_as_the_current_loan(client, auth_headers):
+    created = await client.post("/api/plans", json=VARIABLE_RATE_PLAN, headers=auth_headers)
+    plan_id = created.json()["id"]
+    schedule = (await client.post(f"/api/plans/{plan_id}/schedules", headers=auth_headers)).json()
+    installments = schedule["installments"]
+    june = next(index for index, row in enumerate(installments) if row["installment_number"] == 6)
+    assert (installments[june]["year"], installments[june]["month"]) == (2026, 6)
+    remaining = installments[june + 1 :]
+
+    response = await client.post(
+        "/api/tools/refinance",
+        json={"plan_id": plan_id, "as_of": "2026-07-01", "new_rate": "4", "new_term_months": 48},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    scheduled = [row for row in remaining if row["installment_number"] is not None]
+    assert Decimal(body["current_payment"]) == Decimal(scheduled[0]["total"])
+    assert Decimal(body["current_total_interest"]) == sum(Decimal(row["interest"]) for row in remaining)
+    assert Decimal(body["current_total_paid"]) == sum(Decimal(row["total"]) for row in remaining)
+    assert Decimal(body["current_loan"]["balance"]) == Decimal(installments[june]["balance"]["after"])
+    assert body["current_loan"]["remaining_months"] == len(scheduled)
+    assert Decimal(body["current_loan"]["rate"]) == Decimal("5")
+
+
+@pytest.mark.anyio
+async def test_refinanced_plan_loan_keeps_future_extras_without_penalties_on_the_plans_payment_day(
+    client, auth_headers
+):
+    created = await client.post("/api/plans", json=VARIABLE_RATE_PLAN, headers=auth_headers)
+    response = await client.post(
+        "/api/tools/refinance",
+        json={
+            "plan_id": created.json()["id"],
+            "as_of": "2026-07-01",
+            "new_rate": "4",
+            "new_term_months": 48,
+            "closing_costs": "2000",
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+
+    refinanced = await client.post(
+        "/api/plans",
+        json={
+            "name": "Refinanced",
+            "amount": body["new_principal"],
+            "interest_rate": "4",
+            "term": {"years": 4},
+            "start_date": "2026-07-10",
+            "interest_rate_application": "prorated_by_payment_period",
+            "one_time_extra_payments": [{"date": "2028-03-05", "amount": "1000"}],
+            "recurring_extra_payments": [{"start_date": "2026-08-05", "amount": "200", "count": 18}],
+        },
+        headers=auth_headers,
+    )
+    schedule = (await client.post(f"/api/plans/{refinanced.json()['id']}/schedules", headers=auth_headers)).json()
+    assert Decimal(schedule["totals"]["fees"]) == 0
+    scheduled = [row for row in schedule["installments"] if row["installment_number"] is not None]
+    assert Decimal(body["new_payment"]) == Decimal(scheduled[0]["total"])
+    assert Decimal(body["new_total_interest"]) == Decimal(schedule["totals"]["interest"])
+    assert Decimal(body["new_total_paid"]) == Decimal(schedule["totals"]["total_outflow"]) + 2000
+    assert body["cash_due_at_closing"] == "2000.00"
+
+
 async def plan_totals(client, headers, terms: dict, **extras) -> dict:
     plan = await client.post("/api/plans", json={"name": "Same terms", **terms, **extras}, headers=headers)
     assert plan.status_code == 201, plan.text
@@ -247,7 +333,7 @@ async def test_prepay_vs_invest_entered_terms_match_a_plan_starting_next_month(c
     assert Decimal(body["prepay_net_worth"]) == baseline["total_outflow"] + extras - prepay["total_outflow"]
 
 
-VARIABLE_RATE_PLAN = {
+PREPAY_VARIABLE_RATE_PLAN = {
     "amount": "180000",
     "interest_rate": "5",
     "term": {"years": 25},
@@ -262,7 +348,9 @@ VARIABLE_RATE_PLAN = {
 
 @pytest.mark.anyio
 async def test_prepay_vs_invest_baseline_is_the_plan_schedule(client, auth_headers):
-    created = await client.post("/api/plans", json={"name": "Variable", **VARIABLE_RATE_PLAN}, headers=auth_headers)
+    created = await client.post(
+        "/api/plans", json={"name": "Variable", **PREPAY_VARIABLE_RATE_PLAN}, headers=auth_headers
+    )
     assert created.status_code == 201, created.text
     plan = created.json()
     schedule = (await client.post(f"/api/plans/{plan['id']}/schedules", headers=auth_headers)).json()
@@ -281,7 +369,7 @@ async def test_prepay_vs_invest_baseline_is_the_plan_schedule(client, auth_heade
 
 @pytest.mark.anyio
 async def test_prepay_vs_invest_stacks_the_extra_on_a_plan_and_counts_its_penalties(client, auth_headers):
-    terms = {**VARIABLE_RATE_PLAN, "early_payment_fees": {"fixed": "5", "percent": "1"}}
+    terms = {**PREPAY_VARIABLE_RATE_PLAN, "early_payment_fees": {"fixed": "5", "percent": "1"}}
     created = await client.post("/api/plans", json={"name": "Penalised", **terms}, headers=auth_headers)
     assert created.status_code == 201, created.text
     stacked = [*terms["recurring_extra_payments"], {"start_date": "2026-03-15", "amount": "200", "count": 300}]

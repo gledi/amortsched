@@ -287,7 +287,7 @@ def engine_rows(schedule: AmortizationSchedule) -> list[PeriodRow]:
     return period_rows(schedule.generate(datetime.date(2026, 1, 1)))
 
 
-def test_refinance_from_engine_merges_extra_rows_and_counts_an_extra_only_final_period():
+def test_refinance_from_engine_merges_extra_rows_counts_an_extra_only_final_period_and_reports_the_scheduled_payment():
     current = AmortizationSchedule(D(1200), (1, 0), D(0))
     current.add_one_time_extra_payment(datetime.date(2026, 1, 15), D(50))
     current.add_one_time_extra_payment(datetime.date(2026, 6, 10), D(2000))
@@ -301,7 +301,7 @@ def test_refinance_from_engine_merges_extra_rows_and_counts_an_extra_only_final_
         cash_due=D(0),
     )
 
-    assert result.current_payment == D(150)
+    assert result.current_payment == D(100)
     assert result.new_payment == D(400)
     assert result.current_total_paid == D(1200)
     assert result.current_total_interest == 0
