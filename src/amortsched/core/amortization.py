@@ -86,21 +86,8 @@ class AmortizationSchedule:
     def periods(self) -> int:
         return self.term.periods
 
-    @property
-    def monthly_installment(self) -> Decimal:
-        return level_payment(self.amount, self.interest_rate, self.periods)
-
-    @property
-    def total_amount_paid(self) -> Decimal:
-        if self._last_totals:
-            return self._last_totals.total_outflow
-        return self.monthly_installment * self.periods
-
-    @property
-    def total_interest_paid(self) -> Decimal:
-        if self._last_totals:
-            return self._last_totals.interest
-        return self.total_amount_paid - self.amount
+    def starting_payment(self, start_date: datetime.date) -> Decimal:
+        return level_payment(self.amount, self._yearly_rate_percent_for_date(start_date), self.periods)
 
     @property
     def last_totals(self) -> ScheduleTotals | None:
@@ -348,11 +335,17 @@ class AmortizationSchedule:
         total_interest = Decimal("0.00")
         total_fees = Decimal("0.00")
         paid_off = False
-        scheduled_amount = level_payment(balance, self.interest_rate, self.periods)
+        payment_rate = self._yearly_rate_percent_for_date(start_date)
+        scheduled_amount = self.starting_payment(start_date)
 
         while balance > 0 and scheduled_payment_index < self.periods:
             period_start = date
             period_end = next_month(date, base_day=base_day)
+
+            period_rate = self._yearly_rate_percent_for_date(period_start)
+            if period_rate != payment_rate:
+                payment_rate = period_rate
+                scheduled_amount = level_payment(balance, payment_rate, self.periods - scheduled_payment_index)
 
             extras, balance, accrued_interest = self._accrue_interest_and_apply_extras(
                 period_start=period_start,

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 
@@ -40,3 +42,36 @@ async def test_schedule_must_belong_to_plan_in_url(client, auth_headers):
     schedule_id = generated.json()["id"]
     response = await client.get(f"/api/plans/{plan_ids[1]}/schedules/{schedule_id}", headers=auth_headers)
     assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_schedule_for_plan_with_rate_changes_pays_off_at_plan_payment(client, auth_headers):
+    create_resp = await client.post(
+        "/api/plans",
+        json={
+            "name": "Variable Plan",
+            "amount": "100000",
+            "interest_rate": "5",
+            "term": {"years": 30},
+            "start_date": "2025-01-01",
+            "interest_rate_changes": [
+                {"effective_date": "2025-01-01", "rate": "9"},
+                {"effective_date": "2026-01-01", "rate": "12"},
+            ],
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    plan = create_resp.json()
+
+    resp = await client.post(f"/api/plans/{plan['id']}/schedules", headers=auth_headers)
+    assert resp.status_code == 201
+    data = resp.json()
+    scheduled = [row for row in data["installments"] if row["installment_number"] is not None]
+
+    assert data["totals"]["paid_off"] is True
+    assert data["totals"]["months"] == 360
+    assert Decimal(scheduled[-1]["balance"]["after"]) == 0
+    assert plan["monthly_payment"] == "804.62"
+    assert Decimal(scheduled[0]["total"]).quantize(Decimal("0.01")) == Decimal(plan["monthly_payment"])
+    assert Decimal(scheduled[12]["total"]).quantize(Decimal("0.01")) == Decimal("1025.31")
