@@ -61,9 +61,13 @@ def amortize(
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class PeriodRow:
-    """One payment period of a schedule: everything paid in it and what is owed after it."""
+    """One payment period of a schedule: everything paid in it and what is owed after it.
+
+    `scheduled_payment` is the period's scheduled installment alone; it is zero for an extra-only period.
+    """
 
     outflow: Decimal
+    scheduled_payment: Decimal
     interest: Decimal
     fees: Decimal
     principal: Decimal
@@ -92,6 +96,7 @@ def _merge_period(installments: list[Installment]) -> PeriodRow:
     payments = [installment.payment for installment in installments]
     return PeriodRow(
         outflow=sum((payment.total for payment in payments), ZERO),
+        scheduled_payment=sum((item.payment.total for item in installments if item.i is not None), ZERO),
         interest=sum((payment.interest for payment in payments), ZERO),
         fees=sum((payment.fees for payment in payments), ZERO),
         principal=sum((payment.principal for payment in payments), ZERO),
@@ -103,6 +108,7 @@ def _month_periods(months: list[AmortizationMonth]) -> list[PeriodRow]:
     return [
         PeriodRow(
             outflow=row.payment + row.extra,
+            scheduled_payment=row.payment,
             interest=row.interest,
             fees=ZERO,
             principal=row.principal + row.extra,
@@ -318,8 +324,8 @@ def refinance_from_periods(
 
     current_paid = sum((row.outflow for row in current), ZERO)
     new_paid = sum((row.outflow for row in new), ZERO) + cash_due
-    current_payment = current[0].outflow
-    new_payment = new[0].outflow
+    current_payment = _first_scheduled_payment(current)
+    new_payment = _first_scheduled_payment(new)
     return RefinanceResult(
         current_payment=current_payment,
         new_payment=new_payment,
@@ -334,6 +340,10 @@ def refinance_from_periods(
         break_even_month=break_even,
         advantage_by_month=tuple(advantage),
     )
+
+
+def _first_scheduled_payment(rows: Sequence[PeriodRow]) -> Decimal:
+    return next((row.scheduled_payment for row in rows if row.scheduled_payment > 0), ZERO)
 
 
 # Prepay vs invest
