@@ -181,8 +181,13 @@ def prepay_on_engine(principal: str, rate: str, months: int, extra: str, annual_
 
 
 def test_prepay_invests_the_baseline_outflow_plus_extra_left_over_each_period():
-    # Baseline 256.28 x3 then 256.29; prepay 356.28, 356.28, 307.02 (paid off), so leftover 0, 0, 49.26, 356.29.
     result = prepay_on_engine("1000", "12", 4, "100", "0")
+    baseline_outflows = [D("256.28"), D("256.28"), D("256.28"), D("256.29")]
+    prepay_outflows = [D("356.28"), D("356.28"), D("307.02")]
+    leftovers = [D(0), D(0), D("49.26"), D("356.29")]
+    assert leftovers == [
+        baseline + D(100) - prepay for baseline, prepay in zip(baseline_outflows, [*prepay_outflows, D(0)], strict=True)
+    ]
 
     assert result.regular_payment == D("256.28")
     assert result.payoff_months_with_prepayment == 3
@@ -190,6 +195,7 @@ def test_prepay_invests_the_baseline_outflow_plus_extra_left_over_each_period():
     assert result.interest_without_prepayment == D("25.13")
     assert result.interest_with_prepayment == D("19.58")
     assert [point.prepay for point in result.timeline] == [D("-653.72"), D("-303.98"), D("49.26"), D("405.55")]
+    assert result.prepay_net_worth == sum(leftovers)
     assert [point.invest for point in result.timeline] == [D("-653.72"), D("-304.98"), D("46.25"), D("400")]
     assert result.advantage == result.interest_saved == D("5.55")
     assert result.better_strategy is Strategy.Prepay
@@ -211,17 +217,17 @@ def test_investing_wins_when_returns_exceed_the_loan_rate():
 
 
 def test_prepay_and_invest_tie_on_an_interest_free_loan_with_no_return():
-    # Prepaying 200 a month clears 1200 in 6 periods, then banks 200 for 6 more: 1200, the same as investing 100 x 12.
     result = prepay_on_engine("1200", "0", 12, "100", "0")
+    freed_payment_banked_monthly = D(200)
+    extra_invested_over_term = 12 * D(100)
     assert result.payoff_months_with_prepayment == 6
-    assert result.timeline[6].prepay == result.timeline[6].invest == D(200)
-    assert result.prepay_net_worth == result.invest_net_worth == D(1200)
+    assert result.timeline[6].prepay == result.timeline[6].invest == freed_payment_banked_monthly
+    assert result.prepay_net_worth == result.invest_net_worth == extra_invested_over_term
     assert result.advantage == 0
     assert result.better_strategy is Strategy.Tie
 
 
-def test_break_even_return_equals_the_loan_rate():
-    # Savings and the loan both compound monthly, so investing starts to win once the return passes the loan rate.
+def test_break_even_return_equals_the_loan_rate_when_savings_and_loan_both_compound_monthly():
     result = prepay_on_engine("10000", "12", 12, "500", "5")
     assert result.break_even_return == D("12.00")
 
