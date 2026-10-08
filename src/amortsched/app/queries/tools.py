@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from amortsched.app.access import get_owned_plan
-from amortsched.core.amortization import AmortizationSchedule, next_month, recurrence_dates
+from amortsched.core.amortization import AmortizationSchedule, monthly_dates, next_month, recurrence_dates
 from amortsched.core.calculators import (
     PeriodRow,
     PrepayVsInvestInput,
@@ -111,12 +111,11 @@ class _RemainingPlan:
 def _first_kept_period(plan: Plan, as_of: datetime.date) -> tuple[int, datetime.date]:
     """How many of the plan's periods start before the `as_of` month, and when the first kept one starts."""
     cutoff = (as_of.year, as_of.month)
-    skipped = 0
-    start = plan.start_date
-    while (start.year, start.month) < cutoff:
-        start = next_month(start, base_day=plan.start_date.day)
-        skipped += 1
-    return skipped, start
+    return next(
+        (skipped, start)
+        for skipped, start in enumerate(monthly_dates(plan.start_date))
+        if (start.year, start.month) >= cutoff
+    )
 
 
 def _remaining_plan(plan: Plan, as_of: datetime.date) -> _RemainingPlan:

@@ -2,6 +2,7 @@ import calendar
 import datetime
 from collections.abc import Generator, Iterator
 from decimal import Decimal
+from itertools import islice
 from typing import override
 
 from amortsched.core.errors import AmortizationError, InvalidExtraPaymentError, InvalidRecurringPaymentError
@@ -34,12 +35,17 @@ def next_month(dt: datetime.date, base_day: int | None = None) -> datetime.date:
     return datetime.date(year, month, day)
 
 
+def monthly_dates(start: datetime.date) -> Iterator[datetime.date]:
+    """Monthly dates from `start` on, each on the start's day where the month has it, else the month's last day."""
+    dt = start
+    while True:
+        yield dt
+        dt = next_month(dt, base_day=start.day)
+
+
 def recurrence_dates(recurring: RecurringExtraPayment) -> Iterator[datetime.date]:
     """Each date a recurring extra payment falls on: monthly from its start, on the start's day where it exists."""
-    dt = recurring.start_date
-    for _ in range(recurring.count):
-        yield dt
-        dt = next_month(dt, base_day=recurring.start_date.day)
+    return islice(monthly_dates(recurring.start_date), recurring.count)
 
 
 class AmortizationSchedule:
