@@ -19,6 +19,20 @@ from amortsched.core.calculators import (
 from amortsched.core.entities import Plan
 from amortsched.core.errors import ValidationError
 from amortsched.core.repositories import AsyncRepository
+from amortsched.core.values import InterestRateApplication
+
+
+def entered_terms_schedule(principal: Decimal, annual_rate: Decimal, months: int) -> AmortizationSchedule:
+    """A temporary schedule for loan terms entered without a plan: no extras, no fees, whole-month interest.
+
+    Generate it from the run's start date.
+    """
+    return AmortizationSchedule(
+        principal,
+        (0, months),
+        annual_rate,
+        interest_rate_application=InterestRateApplication.WholeMonth,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,11 +138,6 @@ class PrepayVsInvestPlanHandler:
             currency=plan.currency,
             result=prepay_vs_invest(data),
         )
-
-
-def entered_terms_schedule(principal: Decimal, annual_rate: Decimal, months: int) -> AmortizationSchedule:
-    """A loan on entered terms alone: no extra payments, no fees, whole-month interest."""
-    return AmortizationSchedule(principal, (0, months), annual_rate)
 
 
 def prepay_vs_invest_on_terms(data: PrepayVsInvestInput, start_date: datetime.date) -> PrepayVsInvestResult:
