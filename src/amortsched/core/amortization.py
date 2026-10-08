@@ -4,6 +4,7 @@ from collections.abc import Generator
 from decimal import Decimal
 from typing import override
 
+from amortsched.core.calculators import level_payment
 from amortsched.core.errors import AmortizationError, InvalidExtraPaymentError, InvalidRecurringPaymentError
 from amortsched.core.values import (
     DAYS_IN_YEAR,
@@ -86,15 +87,8 @@ class AmortizationSchedule:
         return self.term.periods
 
     @property
-    def discount_factor(self) -> Decimal:
-        rate = self.monthly_interest_rate
-        if rate == 0:
-            return Decimal(self.periods)
-        return ((1 + rate) ** self.periods - 1) / (rate * (1 + rate) ** self.periods)
-
-    @property
     def monthly_installment(self) -> Decimal:
-        return self.amount / self.discount_factor
+        return level_payment(self.amount, self.interest_rate, self.periods)
 
     @property
     def total_amount_paid(self) -> Decimal:
@@ -354,6 +348,7 @@ class AmortizationSchedule:
         total_interest = Decimal("0.00")
         total_fees = Decimal("0.00")
         paid_off = False
+        scheduled_amount = level_payment(balance, self.interest_rate, self.periods)
 
         while balance > 0 and scheduled_payment_index < self.periods:
             period_start = date
@@ -375,7 +370,7 @@ class AmortizationSchedule:
                 break
 
             scheduled_payment_index += 1
-            principal = self.monthly_installment - accrued_interest
+            principal = scheduled_amount - accrued_interest
             if scheduled_payment_index == self.periods:
                 principal = balance
             if principal > balance:
