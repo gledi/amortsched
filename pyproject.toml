@@ -33,7 +33,11 @@ test = [
   "pytest-factoryboy",
   "testcontainers",
 ]
-lint = ["ruff", "basedpyright"]
+lint = [
+    "ruff",
+    "basedpyright",
+    "import-linter>=2.15",
+]
 dev = [
   "debugpy",
   "icecream",
@@ -92,3 +96,22 @@ include = ["src"]
 extraPaths = ["src"]
 reportMissingImports = false
 reportMissingTypeStubs = false
+
+[tool.importlinter]
+root_package = "amortsched"
+
+[[tool.importlinter.contracts]]
+name = "Layers import inward only"
+type = "layers"
+layers = ["amortsched.api", "amortsched.adapters", "amortsched.app", "amortsched.core"]
+
+[[tool.importlinter.contracts]]
+name = "Schedule engine and decision tools stay independent"
+type = "independence"
+modules = ["amortsched.core.amortization", "amortsched.core.calculators"]
+
+[[tool.importlinter.contracts]]
+name = "Money and payment math sit below the engines"
+type = "forbidden"
+source_modules = ["amortsched.core.money", "amortsched.core.payments"]
+forbidden_modules = ["amortsched.core.amortization", "amortsched.core.calculators"]

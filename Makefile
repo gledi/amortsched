@@ -110,8 +110,9 @@ dev/up: venv lock sync ## Full dev setup: venv + lock + sync (upgrades deps)
 .PHONY: test cov test/cov cov/report lint/check lint lint/fix fmt/check fmt fmt/fix typecheck
 
 ##@ Lint & format
-lint/check lint: ## Check for linting issues with ruff
+lint/check lint: ## Check for linting issues with ruff and import contracts
 	uv run --locked ruff check src/ tests/
+	uv run --locked lint-imports
 
 lint/fix: ## Auto-fix ruff lint issues (WARNING: modifies files!)
 	uv run --locked ruff check --fix src/ tests/

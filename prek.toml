@@ -40,3 +40,12 @@ entry = "uv run ruff format --force-exclude --check --config=pyproject.toml"
 language = "system"
 types_or = ["python", "pyi"]
 require_serial = true
+
+[[repos.hooks]]
+id = "import-linter"
+name = "import-linter"
+entry = "uv run lint-imports"
+language = "system"
+types_or = ["python", "pyi"]
+pass_filenames = false
+require_serial = true
