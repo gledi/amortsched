@@ -243,3 +243,35 @@ async def test_prepay_vs_invest_entered_terms_match_a_plan_starting_next_month(c
     extras = 360 * Decimal(300)
     assert Decimal(body["invest_net_worth"]) == extras
     assert Decimal(body["prepay_net_worth"]) == baseline["total_outflow"] + extras - prepay["total_outflow"]
+
+
+VARIABLE_RATE_PLAN = {
+    "amount": "180000",
+    "interest_rate": "5",
+    "term": {"years": 25},
+    "start_date": "2026-03-15",
+    "upfront_fees": "4000",
+    "interest_rate_application": "prorated_by_payment_period",
+    "interest_rate_changes": [{"effective_date": "2029-04-01", "rate": "6.5"}],
+    "one_time_extra_payments": [{"date": "2027-03-15", "amount": "10000"}],
+    "recurring_extra_payments": [{"start_date": "2026-09-15", "amount": "150", "count": 60}],
+}
+
+
+@pytest.mark.anyio
+async def test_prepay_vs_invest_baseline_is_the_plan_schedule(client, auth_headers):
+    created = await client.post("/api/plans", json={"name": "Variable", **VARIABLE_RATE_PLAN}, headers=auth_headers)
+    assert created.status_code == 201, created.text
+    plan = created.json()
+    schedule = (await client.post(f"/api/plans/{plan['id']}/schedules", headers=auth_headers)).json()
+
+    response = await client.post(
+        "/api/tools/prepay-vs-invest",
+        json={"plan_id": plan["id"], "extra_monthly": "200", "annual_return": "4"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert Decimal(body["interest_without_prepayment"]) == Decimal(schedule["totals"]["interest"])
+    assert Decimal(body["regular_payment"]) == Decimal(plan["monthly_payment"])

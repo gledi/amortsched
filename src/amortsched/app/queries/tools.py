@@ -1,5 +1,6 @@
 import datetime
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -11,7 +12,6 @@ from amortsched.core.calculators import (
     RefinanceInput,
     RefinanceResult,
     period_rows,
-    prepay_vs_invest,
     prepay_vs_invest_from_periods,
     refinance,
     validate_prepay_vs_invest,
@@ -131,20 +131,29 @@ class PrepayVsInvestPlanHandler:
             extra_monthly=query.extra_monthly,
             annual_return=query.annual_return,
         )
+        validate_prepay_vs_invest(data)
         return PlanPrepayVsInvest(
             principal=data.principal,
             interest_rate=data.interest_rate,
             term_months=data.term_months,
             currency=plan.currency,
-            result=prepay_vs_invest(data),
+            result=_prepay_vs_invest_on_schedules(plan.to_schedule, data, plan.start_date),
         )
 
 
 def prepay_vs_invest_on_terms(data: PrepayVsInvestInput, start_date: datetime.date) -> PrepayVsInvestResult:
     """Prepay vs invest for entered terms, on engine schedules whose first period starts on `start_date`."""
     validate_prepay_vs_invest(data)
-    baseline = entered_terms_schedule(data.principal, data.interest_rate, data.term_months)
-    prepay = entered_terms_schedule(data.principal, data.interest_rate, data.term_months)
+    return _prepay_vs_invest_on_schedules(
+        lambda: entered_terms_schedule(data.principal, data.interest_rate, data.term_months), data, start_date
+    )
+
+
+def _prepay_vs_invest_on_schedules(
+    build_baseline: Callable[[], AmortizationSchedule], data: PrepayVsInvestInput, start_date: datetime.date
+) -> PrepayVsInvestResult:
+    baseline = build_baseline()
+    prepay = build_baseline()
     prepay.add_recurring_extra_payment(start_date, data.extra_monthly, count=data.term_months)
     return prepay_vs_invest_from_periods(
         baseline=period_rows(baseline.generate(start_date)),
