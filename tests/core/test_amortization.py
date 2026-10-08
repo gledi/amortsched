@@ -370,3 +370,23 @@ def test_extra_payment_payoff_row_carries_the_period_interest():
     assert payoff.payment.interest > 0
     assert sum(inst.payment.interest for inst in installments) == totals.interest
     assert sum(inst.payment.principal for inst in installments) == totals.principal
+
+
+def test_extra_payments_dated_on_payment_dates_are_each_applied_once():
+    schedule = AmortizationSchedule(amount=1000, term=Term(0, 4), interest_rate=Decimal("12"))
+    schedule.add_one_time_extra_payment(datetime.date(2026, 12, 1), Decimal("50"))
+    schedule.add_recurring_extra_payment(datetime.date(2026, 11, 1), Decimal("100"), count=3)
+
+    rows = list(schedule.generate(datetime.date(2026, 11, 1)))
+
+    periods = [(row.i, int(row.month), row.payment.principal) for row in rows if row.i is None or row.i < 4]
+    assert [(i, month) for i, month, _ in periods] == [
+        (None, 11),
+        (1, 11),
+        (None, 12),
+        (None, 12),
+        (2, 12),
+        (None, 1),
+        (3, 1),
+    ]
+    assert sum(principal for i, _, principal in periods if i is None) == Decimal("350")

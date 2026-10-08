@@ -136,14 +136,14 @@ class AmortizationSchedule:
         extras: list[tuple[PaymentKind, datetime.date, Decimal]] = []
 
         for one_time in self.one_time_extra_payments:
-            if period_start <= one_time.date <= period_end:
+            if period_start <= one_time.date < period_end:
                 extras.append((PaymentKind.OneTimeExtraPayment, one_time.date, one_time.amount))
 
         for recurring in self.recurring_extra_payments:
             dt = recurring.start_date
             base_day = recurring.start_date.day
             for _ in range(recurring.count):
-                if period_start <= dt <= period_end:
+                if period_start <= dt < period_end:
                     extras.append((PaymentKind.RecurringExtraPayment, dt, recurring.amount))
                 dt = next_month(dt, base_day=base_day)
 
@@ -172,27 +172,6 @@ class AmortizationSchedule:
 
         # ProratedByPaymentPeriod
         return {c.effective_date for c in self.interest_rate_changes if period_start < c.effective_date < period_end}
-
-    def _split_extras_for_period_end(
-        self,
-        *,
-        extras: list[tuple[PaymentKind, datetime.date, Decimal]],
-        period_end: datetime.date,
-    ) -> tuple[
-        dict[datetime.date, list[tuple[PaymentKind, Decimal]]],
-        list[tuple[PaymentKind, datetime.date, Decimal]],
-    ]:
-        extras_by_date: dict[datetime.date, list[tuple[PaymentKind, Decimal]]] = {}
-        extras_on_end: list[tuple[PaymentKind, datetime.date, Decimal]] = []
-
-        for kind, dt, amount in extras:
-            if dt == period_end:
-                extras_on_end.append((kind, dt, amount))
-                continue
-            if dt < period_end:
-                extras_by_date.setdefault(dt, []).append((kind, amount))
-
-        return extras_by_date, extras_on_end
 
     def _apply_extra_payment(
         self,
@@ -251,7 +230,9 @@ class AmortizationSchedule:
         balance: Decimal,
     ) -> tuple[list[Installment], Decimal, Decimal]:
         extras = self._extras_for_period(period_start, period_end)
-        extras_by_date, extras_on_end = self._split_extras_for_period_end(extras=extras, period_end=period_end)
+        extras_by_date: dict[datetime.date, list[tuple[PaymentKind, Decimal]]] = {}
+        for kind, dt, amount in extras:
+            extras_by_date.setdefault(dt, []).append((kind, amount))
 
         cut_points = set(extras_by_date.keys()) | self._rate_change_cut_points_for_period(period_start, period_end)
         cut_points = {dt for dt in cut_points if period_start < dt < period_end}
@@ -280,16 +261,6 @@ class AmortizationSchedule:
                     )
                     if extra_row:
                         installments.append(extra_row)
-
-        for kind, dt, amount in extras_on_end:
-            extra_row, balance = self._apply_extra_payment(
-                kind=kind,
-                dt=dt,
-                requested_amount=amount,
-                balance=balance,
-            )
-            if extra_row:
-                installments.append(extra_row)
 
         day_basis = self._interest_day_basis(period_start=period_start, period_end=period_end)
         interest = round_cents(interest_numerator / (HUNDRED * day_basis))
