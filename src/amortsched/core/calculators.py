@@ -53,9 +53,10 @@ def period_rows(installments: Iterable[Installment]) -> list[PeriodRow]:
 
 def _merge_period(installments: list[Installment]) -> PeriodRow:
     payments = [installment.payment for installment in installments]
+    scheduled = [installment.payment for installment in installments if installment.i is not None]
     return PeriodRow(
         outflow=sum((payment.total for payment in payments), ZERO),
-        scheduled_payment=sum((item.payment.total for item in installments if item.i is not None), ZERO),
+        scheduled_payment=sum((payment.total for payment in scheduled), ZERO),
         interest=sum((payment.interest for payment in payments), ZERO),
         fees=sum((payment.fees for payment in payments), ZERO),
         principal=sum((payment.principal for payment in payments), ZERO),
@@ -383,15 +384,15 @@ def prepay_vs_invest_from_periods(
         better = Strategy.Tie
     else:
         better = Strategy.Prepay if advantage > 0 else Strategy.Invest
-    interest_plain = sum((row.interest for row in baseline), ZERO)
+    interest_baseline = sum((row.interest for row in baseline), ZERO)
     interest_prepay = sum((row.interest for row in prepay), ZERO)
     return PrepayVsInvestResult(
         regular_payment=regular_payment,
         payoff_months_with_prepayment=len(prepay),
         months_saved=len(baseline) - len(prepay),
-        interest_without_prepayment=interest_plain,
+        interest_without_prepayment=interest_baseline,
         interest_with_prepayment=interest_prepay,
-        interest_saved=interest_plain - interest_prepay,
+        interest_saved=interest_baseline - interest_prepay,
         prepay_net_worth=final.prepay,
         invest_net_worth=final.invest,
         advantage=abs(advantage),
