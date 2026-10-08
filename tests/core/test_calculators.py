@@ -1,20 +1,27 @@
+import datetime
 from decimal import Decimal
 
 import pytest
 
+from amortsched.core.amortization import AmortizationSchedule
 from amortsched.core.calculators import (
     AffordabilityInput,
     LimitingRatio,
+    PeriodRow,
     PrepayVsInvestInput,
     RefinanceInput,
     Strategy,
     affordability,
     amortize,
+    period_rows,
     prepay_vs_invest,
+    prepay_vs_invest_from_periods,
     refinance,
+    refinance_from_periods,
 )
 from amortsched.core.errors import ValidationError
 from amortsched.core.payments import level_payment
+from amortsched.core.values import EarlyPaymentFees
 
 D = Decimal
 
@@ -228,3 +235,51 @@ def test_refinance_and_prepay_money_is_whole_cents():
     for amount in (refi.current_payment, refi.new_payment, refi.current_total_interest, refi.new_total_paid):
         assert amount == amount.quantize(D("0.01"))
     assert prepay_vs_invest(prepay_input("3")).regular_payment == D("1199.10")
+
+
+def engine_rows(schedule: AmortizationSchedule) -> list[PeriodRow]:
+    return period_rows(schedule.generate(datetime.date(2026, 1, 1)))
+
+
+def test_refinance_from_engine_merges_extra_rows_and_counts_an_extra_only_final_period():
+    current = AmortizationSchedule(D(1200), (1, 0), D(0))
+    current.add_one_time_extra_payment(datetime.date(2026, 1, 15), D(50))
+    current.add_one_time_extra_payment(datetime.date(2026, 6, 10), D(2000))
+    new = AmortizationSchedule(D(1200), (0, 3), D(0))
+
+    result = refinance_from_periods(
+        current=engine_rows(current),
+        current_balance=D(1200),
+        new=engine_rows(new),
+        new_principal=D(1200),
+        cash_due=D(0),
+    )
+
+    assert result.current_payment == D(150)
+    assert result.new_payment == D(400)
+    assert result.current_total_paid == D(1200)
+    assert result.current_total_interest == 0
+    assert len(result.advantage_by_month) == 7
+    assert result.advantage_by_month[1] == D(0)
+
+
+def test_prepay_vs_invest_from_engine_counts_extra_payment_fees_as_outflow():
+    baseline = AmortizationSchedule(D(1200), (1, 0), D(0))
+    prepay = AmortizationSchedule(D(1200), (1, 0), D(0), EarlyPaymentFees(fixed=D(5)))
+    prepay.add_recurring_extra_payment(datetime.date(2026, 1, 15), D(100), 12)
+
+    result = prepay_vs_invest_from_periods(
+        baseline=engine_rows(baseline),
+        prepay=engine_rows(prepay),
+        regular_payment=D(100),
+        extra_monthly=D(100),
+        annual_return=D(0),
+    )
+
+    assert result.payoff_months_with_prepayment == 7
+    assert result.months_saved == 5
+    assert result.interest_saved == 0
+    assert len(result.timeline) == 12
+    assert result.timeline[0].prepay == D(-1005)
+    assert result.timeline[-1].prepay == D(1165)
+    assert result.timeline[-1].invest == D(1200)

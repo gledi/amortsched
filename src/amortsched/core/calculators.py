@@ -4,6 +4,7 @@ These model a loan's base terms (fixed rate, level payment, payments at month en
 what-if questions. Plan schedules with dated adjustments come from `amortization.py` instead.
 """
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -11,6 +12,7 @@ from enum import StrEnum
 from amortsched.core.errors import ValidationError
 from amortsched.core.money import CENT, HUNDRED, ZERO, floor_units, round_cents, round_percent
 from amortsched.core.payments import TWELVE, monthly_payment, monthly_rate, payment_factor
+from amortsched.core.values import Installment
 
 MAX_MONTHS = 600
 
@@ -55,6 +57,59 @@ def amortize(
             )
         )
     return rows
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class PeriodRow:
+    """One payment period of a schedule: everything paid in it and what is owed after it."""
+
+    outflow: Decimal
+    interest: Decimal
+    fees: Decimal
+    principal: Decimal
+    balance: Decimal
+
+
+def period_rows(installments: Iterable[Installment]) -> list[PeriodRow]:
+    """Group schedule-engine installments into one row per payment period.
+
+    The engine yields a period's extra payments before its scheduled payment, so a period closes at
+    each scheduled row; extra payments left over at the end form a final period of their own.
+    """
+    rows: list[PeriodRow] = []
+    pending: list[Installment] = []
+    for installment in installments:
+        pending.append(installment)
+        if installment.i is not None:
+            rows.append(_merge_period(pending))
+            pending = []
+    if pending:
+        rows.append(_merge_period(pending))
+    return rows
+
+
+def _merge_period(installments: list[Installment]) -> PeriodRow:
+    payments = [installment.payment for installment in installments]
+    return PeriodRow(
+        outflow=sum((payment.total for payment in payments), ZERO),
+        interest=sum((payment.interest for payment in payments), ZERO),
+        fees=sum((payment.fees for payment in payments), ZERO),
+        principal=sum((payment.principal for payment in payments), ZERO),
+        balance=installments[-1].balance.after,
+    )
+
+
+def _month_periods(months: list[AmortizationMonth]) -> list[PeriodRow]:
+    return [
+        PeriodRow(
+            outflow=row.payment + row.extra,
+            interest=row.interest,
+            fees=ZERO,
+            principal=row.principal + row.extra,
+            balance=row.balance,
+        )
+        for row in months
+    ]
 
 
 def _require(errors: list[dict[str, str]], condition: bool, field: str, message: str) -> None:
@@ -227,13 +282,28 @@ def refinance(data: RefinanceInput) -> RefinanceResult:
         raise ValidationError(errors)
 
     new_principal = data.current_balance + (data.closing_costs if data.roll_costs_into_loan else ZERO)
-    cash_due = ZERO if data.roll_costs_into_loan else data.closing_costs
-    current = amortize(data.current_balance, data.current_rate, data.remaining_months)
-    new = amortize(new_principal, data.new_rate, data.new_term_months)
+    return refinance_from_periods(
+        current=_month_periods(amortize(data.current_balance, data.current_rate, data.remaining_months)),
+        current_balance=data.current_balance,
+        new=_month_periods(amortize(new_principal, data.new_rate, data.new_term_months)),
+        new_principal=new_principal,
+        cash_due=ZERO if data.roll_costs_into_loan else data.closing_costs,
+    )
 
-    def position(rows: list[AmortizationMonth], month: int, start: Decimal, upfront: Decimal) -> Decimal:
+
+def refinance_from_periods(
+    *,
+    current: Sequence[PeriodRow],
+    current_balance: Decimal,
+    new: Sequence[PeriodRow],
+    new_principal: Decimal,
+    cash_due: Decimal,
+) -> RefinanceResult:
+    """Compare keeping the current loan with refinancing, period by period."""
+
+    def position(rows: Sequence[PeriodRow], month: int, start: Decimal, upfront: Decimal) -> Decimal:
         """Money paid so far plus what is still owed: lower is better."""
-        paid = sum((row.payment for row in rows[:month]), ZERO)
+        paid = sum((row.outflow for row in rows[:month]), ZERO)
         owed = rows[month - 1].balance if 0 < month <= len(rows) else (start if month == 0 else ZERO)
         return upfront + paid + owed
 
@@ -241,15 +311,15 @@ def refinance(data: RefinanceInput) -> RefinanceResult:
     advantage: list[Decimal] = []
     break_even: int | None = None
     for month in range(0, horizon + 1):
-        gap = position(current, month, data.current_balance, ZERO) - position(new, month, new_principal, cash_due)
+        gap = position(current, month, current_balance, ZERO) - position(new, month, new_principal, cash_due)
         advantage.append(round_cents(gap))
         if break_even is None and month > 0 and gap >= 0:
             break_even = month
 
-    current_paid = sum((row.payment for row in current), ZERO)
-    new_paid = sum((row.payment for row in new), ZERO) + cash_due
-    current_payment = current[0].payment
-    new_payment = new[0].payment
+    current_paid = sum((row.outflow for row in current), ZERO)
+    new_paid = sum((row.outflow for row in new), ZERO) + cash_due
+    current_payment = current[0].outflow
+    new_payment = new[0].outflow
     return RefinanceResult(
         current_payment=current_payment,
         new_payment=new_payment,
@@ -307,34 +377,42 @@ class PrepayVsInvestResult:
     timeline: tuple[NetWorthPoint, ...]
 
 
-def _net_worths(data: PrepayVsInvestInput, annual_return: Decimal) -> list[NetWorthPoint]:
+@dataclass(frozen=True, kw_only=True, slots=True)
+class _PrepayRuns:
+    baseline: Sequence[PeriodRow]
+    prepay: Sequence[PeriodRow]
+    regular_payment: Decimal
+    extra_monthly: Decimal
+
+
+def _net_worths(runs: _PrepayRuns, annual_return: Decimal) -> list[NetWorthPoint]:
     growth = 1 + annual_return / HUNDRED / TWELVE
-    payment = monthly_payment(data.principal, data.interest_rate, data.term_months)
-    prepay = amortize(data.principal, data.interest_rate, data.term_months, data.extra_monthly)
-    plain = amortize(data.principal, data.interest_rate, data.term_months)
     prepay_savings = ZERO
     invest_savings = ZERO
     points: list[NetWorthPoint] = []
-    for month in range(1, data.term_months + 1):
-        if month <= len(prepay):
-            row = prepay[month - 1]
-            leftover = (payment - row.payment) + (data.extra_monthly - row.extra)
+    for month, baseline_row in enumerate(runs.baseline, start=1):
+        if month <= len(runs.prepay):
+            row = runs.prepay[month - 1]
+            leftover = runs.regular_payment + runs.extra_monthly - row.outflow
             prepay_debt = row.balance
         else:
-            leftover = payment + data.extra_monthly
+            leftover = runs.regular_payment + runs.extra_monthly
             prepay_debt = ZERO
         prepay_savings = prepay_savings * growth + leftover
-        invest_savings = invest_savings * growth + data.extra_monthly
-        invest_debt = plain[month - 1].balance if month <= len(plain) else ZERO
+        invest_savings = invest_savings * growth + runs.extra_monthly
         points.append(
-            NetWorthPoint(month=month, prepay=prepay_savings - prepay_debt, invest=invest_savings - invest_debt)
+            NetWorthPoint(
+                month=month,
+                prepay=prepay_savings - prepay_debt,
+                invest=invest_savings - baseline_row.balance,
+            )
         )
     return points
 
 
-def _break_even_return(data: PrepayVsInvestInput) -> Decimal | None:
+def _break_even_return(runs: _PrepayRuns) -> Decimal | None:
     def gap(annual_return: Decimal) -> Decimal:
-        final = _net_worths(data, annual_return)[-1]
+        final = _net_worths(runs, annual_return)[-1]
         return final.invest - final.prepay
 
     low, high = ZERO, Decimal("50")
@@ -362,21 +440,38 @@ def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
     if errors:
         raise ValidationError(errors)
 
-    plain = amortize(data.principal, data.interest_rate, data.term_months)
-    prepay = amortize(data.principal, data.interest_rate, data.term_months, data.extra_monthly)
-    timeline = _net_worths(data, data.annual_return)
+    return prepay_vs_invest_from_periods(
+        baseline=_month_periods(amortize(data.principal, data.interest_rate, data.term_months)),
+        prepay=_month_periods(amortize(data.principal, data.interest_rate, data.term_months, data.extra_monthly)),
+        regular_payment=monthly_payment(data.principal, data.interest_rate, data.term_months),
+        extra_monthly=data.extra_monthly,
+        annual_return=data.annual_return,
+    )
+
+
+def prepay_vs_invest_from_periods(
+    *,
+    baseline: Sequence[PeriodRow],
+    prepay: Sequence[PeriodRow],
+    regular_payment: Decimal,
+    extra_monthly: Decimal,
+    annual_return: Decimal,
+) -> PrepayVsInvestResult:
+    """Compare prepaying the loan with investing the extra, period by period over the baseline loan."""
+    runs = _PrepayRuns(baseline=baseline, prepay=prepay, regular_payment=regular_payment, extra_monthly=extra_monthly)
+    timeline = _net_worths(runs, annual_return)
     final = timeline[-1]
     advantage = final.prepay - final.invest
     if abs(advantage) < CENT:
         better = Strategy.Tie
     else:
         better = Strategy.Prepay if advantage > 0 else Strategy.Invest
-    interest_plain = sum((row.interest for row in plain), ZERO)
+    interest_plain = sum((row.interest for row in baseline), ZERO)
     interest_prepay = sum((row.interest for row in prepay), ZERO)
     return PrepayVsInvestResult(
-        regular_payment=monthly_payment(data.principal, data.interest_rate, data.term_months),
+        regular_payment=regular_payment,
         payoff_months_with_prepayment=len(prepay),
-        months_saved=len(plain) - len(prepay),
+        months_saved=len(baseline) - len(prepay),
         interest_without_prepayment=interest_plain,
         interest_with_prepayment=interest_prepay,
         interest_saved=interest_plain - interest_prepay,
@@ -384,6 +479,6 @@ def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
         invest_net_worth=final.invest,
         advantage=abs(advantage),
         better_strategy=better,
-        break_even_return=_break_even_return(data),
+        break_even_return=_break_even_return(runs),
         timeline=tuple(timeline),
     )
