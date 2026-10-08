@@ -2,6 +2,9 @@ from decimal import Decimal
 
 import pytest
 
+from amortsched.core.amortization import next_month
+from amortsched.core.utils import today
+
 
 @pytest.mark.anyio
 async def test_tools_require_authentication(client):
@@ -166,3 +169,43 @@ async def test_refinance_rejects_sub_cent_current_balance(client, auth_headers):
         headers=auth_headers,
     )
     assert response.status_code == 422
+
+
+async def plan_totals(client, headers, terms: dict, **extras) -> dict:
+    plan = await client.post("/api/plans", json={"name": "Same terms", **terms, **extras}, headers=headers)
+    assert plan.status_code == 201, plan.text
+    schedule = await client.post(f"/api/plans/{plan.json()['id']}/schedules", headers=headers)
+    return {
+        key: Decimal(value) for key, value in schedule.json()["totals"].items() if key in {"interest", "total_outflow"}
+    }
+
+
+@pytest.mark.anyio
+async def test_prepay_vs_invest_entered_terms_match_a_plan_starting_next_month(client, auth_headers):
+    start = next_month(today().replace(day=1)).isoformat()
+    terms = {"amount": "200000", "interest_rate": "6.5", "term": {"years": 30}, "start_date": start}
+    baseline = await plan_totals(client, auth_headers, terms)
+    prepay = await plan_totals(
+        client, auth_headers, terms, recurring_extra_payments=[{"start_date": start, "amount": "300", "count": 360}]
+    )
+
+    response = await client.post(
+        "/api/tools/prepay-vs-invest",
+        json={
+            "principal": "200000",
+            "interest_rate": "6.5",
+            "term_months": 360,
+            "extra_monthly": "300",
+            "annual_return": "0",
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["regular_payment"] == "1264.14"
+    assert Decimal(body["interest_without_prepayment"]) == baseline["interest"]
+    assert Decimal(body["interest_with_prepayment"]) == prepay["interest"]
+    extras = 360 * Decimal(300)
+    assert Decimal(body["invest_net_worth"]) == extras
+    assert Decimal(body["prepay_net_worth"]) == baseline["total_outflow"] + extras - prepay["total_outflow"]
