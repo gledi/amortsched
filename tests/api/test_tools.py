@@ -166,3 +166,37 @@ async def test_refinance_rejects_sub_cent_current_balance(client, auth_headers):
         headers=auth_headers,
     )
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_entered_terms_refinance_matches_a_plan_with_the_same_terms(client, auth_headers):
+    created = await client.post(
+        "/api/plans",
+        json={
+            "name": "Same terms",
+            "amount": "250000",
+            "interest_rate": "6.75",
+            "term": {"years": 20, "months": 7},
+            "start_date": "2026-01-31",
+        },
+        headers=auth_headers,
+    )
+    schedule = (await client.post(f"/api/plans/{created.json()['id']}/schedules", headers=auth_headers)).json()
+
+    response = await client.post(
+        "/api/tools/refinance",
+        json={
+            "as_of": "2026-01-31",
+            "current_balance": "250000",
+            "current_rate": "6.75",
+            "remaining_months": 247,
+            "new_rate": "5",
+            "new_term_months": 120,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert Decimal(body["current_payment"]) == Decimal(schedule["installments"][0]["total"])
+    assert Decimal(body["current_total_interest"]) == Decimal(schedule["totals"]["interest"])
+    assert Decimal(body["current_total_paid"]) == Decimal(schedule["totals"]["total_outflow"])

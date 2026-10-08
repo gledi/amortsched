@@ -10,6 +10,7 @@ from amortsched.core.calculators import (
     PeriodRow,
     PrepayVsInvestInput,
     RefinanceInput,
+    RefinanceResult,
     Strategy,
     affordability,
     amortize,
@@ -121,59 +122,63 @@ def test_affordability_validates_inputs():
     assert {item["field"] for item in error.value.errors} == {"gross_monthly_income", "interest_months"}
 
 
-def test_refinance_break_even_accounts_for_cash_closing_costs():
-    result = refinance(
-        RefinanceInput(
-            current_balance=D(300000),
-            current_rate=D(7),
-            remaining_months=300,
-            new_rate=D("5.5"),
-            new_term_months=300,
-            closing_costs=D(6000),
-        )
+def refinance_on_engine(
+    balance: Decimal,
+    rate: Decimal,
+    months: int,
+    new_rate: Decimal,
+    new_months: int,
+    closing_costs: Decimal,
+    roll_costs_into_loan: bool = False,
+) -> RefinanceResult:
+    start = datetime.date(2026, 1, 1)
+    new_principal = balance + (closing_costs if roll_costs_into_loan else D(0))
+    return refinance_from_periods(
+        current=period_rows(AmortizationSchedule(balance, (0, months), rate).generate(start)),
+        current_balance=balance,
+        new=period_rows(AmortizationSchedule(new_principal, (0, new_months), new_rate).generate(start)),
+        new_principal=new_principal,
+        cash_due=D(0) if roll_costs_into_loan else closing_costs,
     )
-    assert result.monthly_savings > 0
+
+
+def test_refinance_break_even_accounts_for_cash_closing_costs():
+    result = refinance_on_engine(D(300000), D(7), 300, D("5.5"), 300, D(6000))
+
+    assert result.current_payment == D("2120.34")
+    assert result.new_payment == D("1842.26")
     assert result.cash_due_at_closing == D(6000)
-    assert result.break_even_month is not None
-    naive = int(D(6000) / result.monthly_savings) + 1
-    assert result.break_even_month <= naive
+    assert result.current_total_interest == D("336100.16")
+    assert result.new_total_interest == D("252679.70")
+    assert result.new_total_paid == D("558679.70")
+    assert result.break_even_month == 17
     assert result.advantage_by_month[0] == D("-6000.00")
-    assert result.advantage_by_month[result.break_even_month] >= 0
-    assert result.advantage_by_month[result.break_even_month - 1] < 0
-    assert result.lifetime_savings == result.current_total_paid - result.new_total_paid
+    assert result.advantage_by_month[16] == D("-3.85")
+    assert result.advantage_by_month[17] == D("370.50")
+    assert result.advantage_by_month[-1] == D("77420.46")
+    assert len(result.advantage_by_month) == 301
 
 
 def test_refinance_rolling_costs_increases_principal_and_needs_no_cash():
-    result = refinance(
-        RefinanceInput(
-            current_balance=D(200000),
-            current_rate=D(6),
-            remaining_months=240,
-            new_rate=D(5),
-            new_term_months=240,
-            closing_costs=D(4000),
-            roll_costs_into_loan=True,
-        )
-    )
+    result = refinance_on_engine(D(200000), D(6), 240, D(5), 240, D(4000), roll_costs_into_loan=True)
+
     assert result.new_principal == D(204000)
     assert result.cash_due_at_closing == 0
+    assert result.new_payment == D("1346.31")
+    assert result.break_even_month == 27
     assert result.advantage_by_month[0] == D("-4000.00")
+    assert result.advantage_by_month[26] == D("-137.34")
+    assert result.advantage_by_month[27] == D("9.39")
+    assert result.lifetime_savings == D("20772.94")
 
 
 def test_refinance_to_a_higher_rate_never_breaks_even():
-    result = refinance(
-        RefinanceInput(
-            current_balance=D(100000),
-            current_rate=D(4),
-            remaining_months=120,
-            new_rate=D(6),
-            new_term_months=120,
-            closing_costs=D(1000),
-        )
-    )
+    result = refinance_on_engine(D(100000), D(4), 120, D(6), 120, D(1000))
+
     assert result.break_even_month is None
-    assert result.monthly_savings < 0
-    assert result.lifetime_savings < 0
+    assert result.monthly_savings == D("-97.76")
+    assert result.lifetime_savings == D("-12730.08")
+    assert result.advantage_by_month[-1] == D("-12730.08")
 
 
 def prepay_input(annual_return: str) -> PrepayVsInvestInput:

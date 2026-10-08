@@ -11,15 +11,15 @@ from amortsched.api.schemas.tools import (
     RefinanceRequest,
     RefinanceResponse,
 )
-from amortsched.app.queries.tools import PrepayVsInvestPlanQuery, RefinancePlanQuery
+from amortsched.app.queries.tools import PrepayVsInvestPlanQuery, RefinancePlanQuery, entered_terms_schedule
 from amortsched.core.calculators import (
     PrepayVsInvestInput,
-    RefinanceInput,
     affordability,
+    period_rows,
     prepay_vs_invest,
-    refinance,
+    refinance_from_periods,
 )
-from amortsched.core.money import round_cents
+from amortsched.core.money import ZERO, round_cents
 from amortsched.core.utils import today
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
@@ -53,16 +53,16 @@ async def run_refinance(body: RefinanceRequest, user_id: CurrentUserId, handler:
         return RefinanceResponse.from_result(current, outcome.result)
 
     assert body.current_balance is not None and body.current_rate is not None and body.remaining_months is not None
-    result = refinance(
-        RefinanceInput(
-            current_balance=body.current_balance,
-            current_rate=body.current_rate,
-            remaining_months=body.remaining_months,
-            new_rate=body.new_rate,
-            new_term_months=body.new_term_months,
-            closing_costs=body.closing_costs,
-            roll_costs_into_loan=body.roll_costs_into_loan,
-        )
+    as_of = body.as_of or today()
+    new_principal = body.current_balance + (body.closing_costs if body.roll_costs_into_loan else ZERO)
+    current_schedule = entered_terms_schedule(body.current_balance, body.current_rate, body.remaining_months)
+    new_schedule = entered_terms_schedule(new_principal, body.new_rate, body.new_term_months)
+    result = refinance_from_periods(
+        current=period_rows(current_schedule.generate(as_of)),
+        current_balance=body.current_balance,
+        new=period_rows(new_schedule.generate(as_of)),
+        new_principal=new_principal,
+        cash_due=ZERO if body.roll_costs_into_loan else body.closing_costs,
     )
     current = CurrentLoanResponse(
         balance=body.current_balance,
