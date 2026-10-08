@@ -1,6 +1,6 @@
 import calendar
 import datetime
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from decimal import Decimal
 from typing import override
 
@@ -32,6 +32,14 @@ def next_month(dt: datetime.date, base_day: int | None = None) -> datetime.date:
     target_day = base_day if base_day is not None else dt.day
     day = min(target_day, calendar.monthrange(year, month)[1])
     return datetime.date(year, month, day)
+
+
+def recurrence_dates(recurring: RecurringExtraPayment) -> Iterator[datetime.date]:
+    """Each date a recurring extra payment falls on: monthly from its start, on the start's day where it exists."""
+    dt = recurring.start_date
+    for _ in range(recurring.count):
+        yield dt
+        dt = next_month(dt, base_day=recurring.start_date.day)
 
 
 class AmortizationSchedule:
@@ -88,7 +96,7 @@ class AmortizationSchedule:
         return self.term.periods
 
     def starting_payment(self, start_date: datetime.date) -> Decimal:
-        return monthly_payment(self.amount, self._yearly_rate_percent_for_date(start_date), self.periods)
+        return monthly_payment(self.amount, self.yearly_rate_percent_on(start_date), self.periods)
 
     @property
     def last_totals(self) -> ScheduleTotals | None:
@@ -101,8 +109,8 @@ class AmortizationSchedule:
         self.interest_rate_changes.append(InterestRateChange(effective_date=effective_date, yearly_interest_rate=rate))
         self.interest_rate_changes.sort(key=lambda c: c.effective_date)
 
-    def _yearly_rate_percent_for_date(self, dt: datetime.date) -> Decimal:
-        # Latest change whose effective_date <= dt, otherwise fall back to base self.interest_rate.
+    def yearly_rate_percent_on(self, dt: datetime.date) -> Decimal:
+        """The yearly rate in effect on `dt`: the latest Rate Change effective by then, else the base rate."""
         chosen: InterestRateChange | None = None
         for change in self.interest_rate_changes:
             if change.effective_date <= dt:
@@ -119,14 +127,14 @@ class AmortizationSchedule:
         scheduled_month: int,
     ) -> Decimal:
         if self.interest_rate_application != InterestRateApplication.ProratedByDaysInMonth:
-            return self._yearly_rate_percent_for_date(dt)
+            return self.yearly_rate_percent_on(dt)
 
         # In ProratedByDaysInMonth mode, ignore rate changes that happen after the scheduled month.
         # This mirrors the original behavior where only changes inside the scheduled month were considered.
         days_in_month = calendar.monthrange(scheduled_month_year, scheduled_month)[1]
         last_day_of_scheduled_month = datetime.date(scheduled_month_year, scheduled_month, days_in_month)
         effective_dt = dt if dt <= last_day_of_scheduled_month else last_day_of_scheduled_month
-        return self._yearly_rate_percent_for_date(effective_dt)
+        return self.yearly_rate_percent_on(effective_dt)
 
     def _extras_for_period(
         self,
@@ -140,12 +148,9 @@ class AmortizationSchedule:
                 extras.append((PaymentKind.OneTimeExtraPayment, one_time.date, one_time.amount))
 
         for recurring in self.recurring_extra_payments:
-            dt = recurring.start_date
-            base_day = recurring.start_date.day
-            for _ in range(recurring.count):
+            for dt in recurrence_dates(recurring):
                 if period_start <= dt < period_end:
                     extras.append((PaymentKind.RecurringExtraPayment, dt, recurring.amount))
-                dt = next_month(dt, base_day=base_day)
 
         # Stable sort by date, then kind name for deterministic ordering.
         return sorted(extras, key=lambda x: (x[1], str(x[0])))
@@ -209,7 +214,7 @@ class AmortizationSchedule:
         segment_start: datetime.date,
     ) -> Decimal:
         if self.interest_rate_application == InterestRateApplication.WholeMonth:
-            return self._yearly_rate_percent_for_date(period_start)
+            return self.yearly_rate_percent_on(period_start)
 
         return self._yearly_rate_percent_with_application_limit(
             segment_start,
@@ -295,14 +300,14 @@ class AmortizationSchedule:
         total_interest = ZERO
         total_fees = ZERO
         paid_off = False
-        payment_rate = self._yearly_rate_percent_for_date(start_date)
+        payment_rate = self.yearly_rate_percent_on(start_date)
         scheduled_amount = self.starting_payment(start_date)
 
         while balance > 0 and scheduled_payment_index < self.periods:
             period_start = date
             period_end = next_month(date, base_day=base_day)
 
-            period_rate = self._yearly_rate_percent_for_date(period_start)
+            period_rate = self.yearly_rate_percent_on(period_start)
             if period_rate != payment_rate:
                 payment_rate = period_rate
                 scheduled_amount = monthly_payment(balance, payment_rate, self.periods - scheduled_payment_index)
