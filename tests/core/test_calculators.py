@@ -9,6 +9,7 @@ from amortsched.core.calculators import (
     LimitingRatio,
     PeriodRow,
     PrepayVsInvestInput,
+    PrepayVsInvestResult,
     RefinanceInput,
     Strategy,
     affordability,
@@ -176,6 +177,35 @@ def test_refinance_to_a_higher_rate_never_breaks_even():
     assert result.lifetime_savings < 0
 
 
+def prepay_on_engine(principal: str, rate: str, months: int, extra: str, annual_return: str) -> PrepayVsInvestResult:
+    start = datetime.date(2026, 11, 1)
+    baseline = AmortizationSchedule(D(principal), (0, months), D(rate))
+    prepay = AmortizationSchedule(D(principal), (0, months), D(rate))
+    prepay.add_recurring_extra_payment(start, D(extra), months)
+    return prepay_vs_invest_from_periods(
+        baseline=period_rows(baseline.generate(start)),
+        prepay=period_rows(prepay.generate(start)),
+        regular_payment=baseline.starting_payment(start),
+        extra_monthly=D(extra),
+        annual_return=D(annual_return),
+    )
+
+
+def test_prepay_invests_the_baseline_outflow_plus_extra_left_over_each_period():
+    # Baseline 256.28 x3 then 256.29; prepay 356.28, 356.28, 307.02 (paid off), so leftover 0, 0, 49.26, 356.29.
+    result = prepay_on_engine("1000", "12", 4, "100", "0")
+
+    assert result.regular_payment == D("256.28")
+    assert result.payoff_months_with_prepayment == 3
+    assert result.months_saved == 1
+    assert result.interest_without_prepayment == D("25.13")
+    assert result.interest_with_prepayment == D("19.58")
+    assert [point.prepay for point in result.timeline] == [D("-653.72"), D("-303.98"), D("49.26"), D("405.55")]
+    assert [point.invest for point in result.timeline] == [D("-653.72"), D("-304.98"), D("46.25"), D("400")]
+    assert result.advantage == result.interest_saved == D("5.55")
+    assert result.better_strategy is Strategy.Prepay
+
+
 def prepay_input(annual_return: str) -> PrepayVsInvestInput:
     return PrepayVsInvestInput(
         principal=D(200000),
@@ -187,7 +217,7 @@ def prepay_input(annual_return: str) -> PrepayVsInvestInput:
 
 
 def test_prepaying_wins_when_returns_are_below_the_loan_rate():
-    result = prepay_vs_invest(prepay_input("3"))
+    result = prepay_on_engine("200000", "6", 360, "300", "3")
     assert result.better_strategy is Strategy.Prepay
     assert result.months_saved > 0
     assert result.interest_saved > 0
@@ -196,14 +226,25 @@ def test_prepaying_wins_when_returns_are_below_the_loan_rate():
 
 
 def test_investing_wins_when_returns_exceed_the_loan_rate():
-    result = prepay_vs_invest(prepay_input("9"))
+    result = prepay_on_engine("200000", "6", 360, "300", "9")
     assert result.better_strategy is Strategy.Invest
     assert result.advantage == result.invest_net_worth - result.prepay_net_worth
 
 
+def test_prepay_and_invest_tie_on_an_interest_free_loan_with_no_return():
+    # Prepaying 200 a month clears 1200 in 6 periods, then banks 200 for 6 more: 1200, the same as investing 100 x 12.
+    result = prepay_on_engine("1200", "0", 12, "100", "0")
+    assert result.payoff_months_with_prepayment == 6
+    assert result.timeline[6].prepay == result.timeline[6].invest == D(200)
+    assert result.prepay_net_worth == result.invest_net_worth == D(1200)
+    assert result.advantage == 0
+    assert result.better_strategy is Strategy.Tie
+
+
 def test_break_even_return_equals_the_loan_rate():
-    result = prepay_vs_invest(prepay_input("7"))
-    assert result.break_even_return == D("6.00")
+    # Savings and the loan both compound monthly, so investing starts to win once the return passes the loan rate.
+    result = prepay_on_engine("10000", "12", 12, "500", "5")
+    assert result.break_even_return == D("12.00")
 
 
 def test_level_payment_stays_unrounded():

@@ -381,7 +381,6 @@ class PrepayVsInvestResult:
 class _PrepayRuns:
     baseline: Sequence[PeriodRow]
     prepay: Sequence[PeriodRow]
-    regular_payment: Decimal
     extra_monthly: Decimal
 
 
@@ -391,12 +390,13 @@ def _net_worths(runs: _PrepayRuns, annual_return: Decimal) -> list[NetWorthPoint
     invest_savings = ZERO
     points: list[NetWorthPoint] = []
     for month, baseline_row in enumerate(runs.baseline, start=1):
+        available = baseline_row.outflow + runs.extra_monthly
         if month <= len(runs.prepay):
             row = runs.prepay[month - 1]
-            leftover = runs.regular_payment + runs.extra_monthly - row.outflow
+            leftover = available - row.outflow
             prepay_debt = row.balance
         else:
-            leftover = runs.regular_payment + runs.extra_monthly
+            leftover = available
             prepay_debt = ZERO
         prepay_savings = prepay_savings * growth + leftover
         invest_savings = invest_savings * growth + runs.extra_monthly
@@ -458,7 +458,7 @@ def prepay_vs_invest_from_periods(
     annual_return: Decimal,
 ) -> PrepayVsInvestResult:
     """Compare prepaying the loan with investing the extra, period by period over the baseline loan."""
-    runs = _PrepayRuns(baseline=baseline, prepay=prepay, regular_payment=regular_payment, extra_monthly=extra_monthly)
+    runs = _PrepayRuns(baseline=baseline, prepay=prepay, extra_monthly=extra_monthly)
     timeline = _net_worths(runs, annual_return)
     final = timeline[-1]
     advantage = final.prepay - final.invest
