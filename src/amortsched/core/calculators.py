@@ -391,7 +391,6 @@ class PrepayVsInvestResult:
 class _PrepayRuns:
     baseline: Sequence[PeriodRow]
     prepay: Sequence[PeriodRow]
-    regular_payment: Decimal
     extra_monthly: Decimal
 
 
@@ -401,12 +400,13 @@ def _net_worths(runs: _PrepayRuns, annual_return: Decimal) -> list[NetWorthPoint
     invest_savings = ZERO
     points: list[NetWorthPoint] = []
     for month, baseline_row in enumerate(runs.baseline, start=1):
+        available = baseline_row.outflow + runs.extra_monthly
         if month <= len(runs.prepay):
             row = runs.prepay[month - 1]
-            leftover = runs.regular_payment + runs.extra_monthly - row.outflow
+            leftover = available - row.outflow
             prepay_debt = row.balance
         else:
-            leftover = runs.regular_payment + runs.extra_monthly
+            leftover = available
             prepay_debt = ZERO
         prepay_savings = prepay_savings * growth + leftover
         invest_savings = invest_savings * growth + runs.extra_monthly
@@ -440,7 +440,7 @@ def _break_even_return(runs: _PrepayRuns) -> Decimal | None:
     return round_percent((low + high) / 2)
 
 
-def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
+def validate_prepay_vs_invest(data: PrepayVsInvestInput) -> None:
     errors: list[dict[str, str]] = []
     _require(errors, data.principal > 0, "principal", "Principal must be positive")
     _require(errors, data.extra_monthly > 0, "extra_monthly", "Extra payment must be positive")
@@ -450,6 +450,9 @@ def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
     if errors:
         raise ValidationError(errors)
 
+
+def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
+    validate_prepay_vs_invest(data)
     return prepay_vs_invest_from_periods(
         baseline=_month_periods(amortize(data.principal, data.interest_rate, data.term_months)),
         prepay=_month_periods(amortize(data.principal, data.interest_rate, data.term_months, data.extra_monthly)),
@@ -468,7 +471,7 @@ def prepay_vs_invest_from_periods(
     annual_return: Decimal,
 ) -> PrepayVsInvestResult:
     """Compare prepaying the loan with investing the extra, period by period over the baseline loan."""
-    runs = _PrepayRuns(baseline=baseline, prepay=prepay, regular_payment=regular_payment, extra_monthly=extra_monthly)
+    runs = _PrepayRuns(baseline=baseline, prepay=prepay, extra_monthly=extra_monthly)
     timeline = _net_worths(runs, annual_return)
     final = timeline[-1]
     advantage = final.prepay - final.invest

@@ -12,7 +12,9 @@ from amortsched.core.calculators import (
     RefinanceResult,
     period_rows,
     prepay_vs_invest,
+    prepay_vs_invest_from_periods,
     refinance_from_periods,
+    validate_prepay_vs_invest,
 )
 from amortsched.core.entities import Plan
 from amortsched.core.errors import ValidationError
@@ -211,3 +213,18 @@ class PrepayVsInvestPlanHandler:
             currency=plan.currency,
             result=prepay_vs_invest(data),
         )
+
+
+def prepay_vs_invest_on_terms(data: PrepayVsInvestInput, start_date: datetime.date) -> PrepayVsInvestResult:
+    """Prepay vs invest for entered terms, on engine schedules whose first period starts on `start_date`."""
+    validate_prepay_vs_invest(data)
+    baseline = entered_terms_schedule(data.principal, data.interest_rate, data.term_months)
+    prepay = entered_terms_schedule(data.principal, data.interest_rate, data.term_months)
+    prepay.add_recurring_extra_payment(start_date, data.extra_monthly, count=data.term_months)
+    return prepay_vs_invest_from_periods(
+        baseline=period_rows(baseline.generate(start_date)),
+        prepay=period_rows(prepay.generate(start_date)),
+        regular_payment=baseline.starting_payment(start_date),
+        extra_monthly=data.extra_monthly,
+        annual_return=data.annual_return,
+    )
