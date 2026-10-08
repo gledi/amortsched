@@ -1,4 +1,7 @@
 import pytest
+from sqlalchemy import create_engine, update
+
+from amortsched.adapters.persistence.tables import plans
 
 
 @pytest.mark.anyio
@@ -137,3 +140,58 @@ async def test_create_plan_rejects_sub_cent_amount(client, auth_headers):
         headers=auth_headers,
     )
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_create_plan_rejects_sub_cent_early_payment_fixed_fee(client, auth_headers):
+    response = await client.post(
+        "/api/plans",
+        json={
+            "name": "Sub-cent fee",
+            "amount": "200000",
+            "interest_rate": "5.5",
+            "term": {"years": 30, "months": 0},
+            "early_payment_fees": {"fixed": "10.005"},
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_get_plan_serves_stored_sub_cent_money(client, auth_headers, database_url):
+    created = await client.post(
+        "/api/plans",
+        json={
+            "name": "Legacy",
+            "amount": "200000",
+            "interest_rate": "5.5",
+            "term": {"years": 30, "months": 0},
+            "housing_costs": {"property_value": "250000"},
+            "one_time_extra_payments": [{"date": "2026-01-01", "amount": "1000"}],
+        },
+        headers=auth_headers,
+    )
+    assert created.status_code == 201
+    plan_id = created.json()["id"]
+
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            update(plans)
+            .where(plans.c.id == plan_id)
+            .values(
+                early_payment_fees={"fixed": "10.005", "percent": "0"},
+                housing_costs={"property_value": "250000", "hoa_monthly": "45.125"},
+                one_time_extra_payments=[{"date": "2026-01-01", "amount": "1000.001"}],
+            )
+        )
+    engine.dispose()
+
+    response = await client.get(f"/api/plans/{plan_id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["early_payment_fees"]["fixed"] == "10.005"
+    assert body["housing_costs"]["hoa_monthly"] == "45.125"
+    assert body["one_time_extra_payments"][0]["amount"] == "1000.001"

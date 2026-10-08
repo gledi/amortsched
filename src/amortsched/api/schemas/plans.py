@@ -30,15 +30,15 @@ class TermSchema(BaseModel):
 
 
 class EarlyPaymentFeesSchema(BaseModel):
-    fixed: MoneyInput = Field(default=ZERO, ge=0)
+    fixed: Decimal = Field(default=ZERO, ge=0)
     percent: Decimal = Field(default=ZERO, ge=0, le=100)
 
 
 class HousingCostsSchema(BaseModel):
-    property_value: MoneyInput | None = Field(default=None, gt=0)
-    property_tax_annual: MoneyInput = Field(default=ZERO, ge=0)
-    insurance_annual: MoneyInput = Field(default=ZERO, ge=0)
-    hoa_monthly: MoneyInput = Field(default=ZERO, ge=0)
+    property_value: Decimal | None = Field(default=None, gt=0)
+    property_tax_annual: Decimal = Field(default=ZERO, ge=0)
+    insurance_annual: Decimal = Field(default=ZERO, ge=0)
+    hoa_monthly: Decimal = Field(default=ZERO, ge=0)
     pmi_annual_rate: Decimal = Field(default=ZERO, ge=0, le=100)
     pmi_cancel_ltv: Decimal = Field(default=Decimal("78"), gt=0, le=100)
 
@@ -66,7 +66,7 @@ class HousingCostsSchema(BaseModel):
 
 class ExtraPaymentSchema(BaseModel):
     date: datetime.date
-    amount: MoneyInput = Field(gt=0)
+    amount: Decimal = Field(gt=0)
 
     def to_value(self) -> OneTimeExtraPayment:
         return OneTimeExtraPayment(date=self.date, amount=self.amount)
@@ -74,11 +74,30 @@ class ExtraPaymentSchema(BaseModel):
 
 class RecurringExtraPaymentSchema(BaseModel):
     start_date: datetime.date
-    amount: MoneyInput = Field(gt=0)
+    amount: Decimal = Field(gt=0)
     count: int = Field(gt=0, le=600)
 
     def to_value(self) -> RecurringExtraPayment:
         return RecurringExtraPayment(start_date=self.start_date, amount=self.amount, count=self.count)
+
+
+class EarlyPaymentFeesRequest(EarlyPaymentFeesSchema):
+    fixed: MoneyInput = Field(default=ZERO, ge=0)
+
+
+class HousingCostsRequest(HousingCostsSchema):
+    property_value: MoneyInput | None = Field(default=None, gt=0)
+    property_tax_annual: MoneyInput = Field(default=ZERO, ge=0)
+    insurance_annual: MoneyInput = Field(default=ZERO, ge=0)
+    hoa_monthly: MoneyInput = Field(default=ZERO, ge=0)
+
+
+class ExtraPaymentRequest(ExtraPaymentSchema):
+    amount: MoneyInput = Field(gt=0)
+
+
+class RecurringExtraPaymentRequest(RecurringExtraPaymentSchema):
+    amount: MoneyInput = Field(gt=0)
 
 
 class InterestRateChangeSchema(BaseModel):
@@ -90,8 +109,8 @@ class InterestRateChangeSchema(BaseModel):
 
 
 class AdjustmentsSchema(BaseModel):
-    one_time_extra_payments: list[ExtraPaymentSchema] = Field(default_factory=list, max_length=500)
-    recurring_extra_payments: list[RecurringExtraPaymentSchema] = Field(default_factory=list, max_length=100)
+    one_time_extra_payments: list[ExtraPaymentRequest] = Field(default_factory=list, max_length=500)
+    recurring_extra_payments: list[RecurringExtraPaymentRequest] = Field(default_factory=list, max_length=100)
     interest_rate_changes: list[InterestRateChangeSchema] = Field(default_factory=list, max_length=100)
 
 
@@ -107,8 +126,8 @@ class CreatePlanRequest(AdjustmentsSchema):
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     lender: str | None = Field(default=None, max_length=200)
     upfront_fees: MoneyInput = Field(default=ZERO, ge=0)
-    early_payment_fees: EarlyPaymentFeesSchema = Field(default_factory=EarlyPaymentFeesSchema)
-    housing_costs: HousingCostsSchema | None = None
+    early_payment_fees: EarlyPaymentFeesRequest = Field(default_factory=EarlyPaymentFeesRequest)
+    housing_costs: HousingCostsRequest | None = None
     interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth
 
 
@@ -124,8 +143,8 @@ class UpdatePlanRequest(BaseModel):
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     lender: str | None = Field(default=None, max_length=200)
     upfront_fees: MoneyInput | None = Field(default=None, ge=0)
-    early_payment_fees: EarlyPaymentFeesSchema | None = None
-    housing_costs: HousingCostsSchema | None = None
+    early_payment_fees: EarlyPaymentFeesRequest | None = None
+    housing_costs: HousingCostsRequest | None = None
     interest_rate_application: InterestRateApplication | None = None
 
 
