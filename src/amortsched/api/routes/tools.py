@@ -11,12 +11,12 @@ from amortsched.api.schemas.tools import (
     RefinanceRequest,
     RefinanceResponse,
 )
-from amortsched.app.queries.tools import PrepayVsInvestPlanQuery, RefinancePlanQuery
+from amortsched.app.queries.tools import PrepayVsInvestPlanQuery, RefinancePlanQuery, prepay_vs_invest_on_terms
+from amortsched.core.amortization import next_month
 from amortsched.core.calculators import (
     PrepayVsInvestInput,
     RefinanceInput,
     affordability,
-    prepay_vs_invest,
     refinance,
 )
 from amortsched.core.money import round_cents
@@ -109,4 +109,5 @@ async def run_prepay_vs_invest(
         term_months=data.term_months,
         currency=None,
     )
-    return PrepayVsInvestResponse.from_result(loan, prepay_vs_invest(data))
+    result = prepay_vs_invest_on_terms(data, start_date=next_month(today().replace(day=1)))
+    return PrepayVsInvestResponse.from_result(loan, result)

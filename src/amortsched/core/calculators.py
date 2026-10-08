@@ -430,7 +430,7 @@ def _break_even_return(runs: _PrepayRuns) -> Decimal | None:
     return round_percent((low + high) / 2)
 
 
-def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
+def validate_prepay_vs_invest(data: PrepayVsInvestInput) -> None:
     errors: list[dict[str, str]] = []
     _require(errors, data.principal > 0, "principal", "Principal must be positive")
     _require(errors, data.extra_monthly > 0, "extra_monthly", "Extra payment must be positive")
@@ -440,6 +440,9 @@ def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
     if errors:
         raise ValidationError(errors)
 
+
+def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
+    validate_prepay_vs_invest(data)
     return prepay_vs_invest_from_periods(
         baseline=_month_periods(amortize(data.principal, data.interest_rate, data.term_months)),
         prepay=_month_periods(amortize(data.principal, data.interest_rate, data.term_months, data.extra_monthly)),
