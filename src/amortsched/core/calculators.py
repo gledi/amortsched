@@ -119,11 +119,11 @@ class AffordabilityResult:
 def _housing_cost(price: Decimal, data: AffordabilityInput, pmi_active: bool) -> MonthlyHousingBreakdown:
     loan = max(ZERO, price - data.down_payment)
     return MonthlyHousingBreakdown(
-        principal_interest=loan * payment_factor(data.interest_rate, data.term_months),
-        property_tax=price * data.property_tax_rate / HUNDRED / TWELVE,
-        insurance=data.insurance_annual / TWELVE,
+        principal_interest=monthly_payment(loan, data.interest_rate, data.term_months),
+        property_tax=round_cents(price * data.property_tax_rate / HUNDRED / TWELVE),
+        insurance=round_cents(data.insurance_annual / TWELVE),
         hoa=data.hoa_monthly,
-        pmi=loan * data.pmi_annual_rate / HUNDRED / TWELVE if pmi_active else ZERO,
+        pmi=round_cents(loan * data.pmi_annual_rate / HUNDRED / TWELVE) if pmi_active else ZERO,
     )
 
 

@@ -72,7 +72,7 @@ def test_affordability_includes_tax_and_pmi_when_ltv_is_high():
     )
     assert result.monthly.pmi > 0
     assert result.ltv is not None and result.ltv > 80
-    assert result.monthly.property_tax == (result.max_home_price * D("1.2") / 100 / 12)
+    assert result.monthly.property_tax == (result.max_home_price * D("1.2") / 100 / 12).quantize(D("0.01"))
     assert result.monthly.total <= D(2800)
 
 
@@ -88,6 +88,24 @@ def test_affordability_with_no_budget_left():
     assert result.max_home_price == 0
     assert result.max_monthly_housing == 0
     assert result.ltv is None
+
+
+def test_affordability_monthly_lines_are_whole_cents_and_total_is_their_sum():
+    result = affordability(
+        base_affordability(
+            down_payment=D(20000),
+            property_tax_rate=D("1.2"),
+            insurance_annual=D(1000),
+            hoa_monthly=D(50),
+            pmi_annual_rate=D("0.5"),
+        )
+    )
+    monthly = result.monthly
+    lines = (monthly.principal_interest, monthly.property_tax, monthly.insurance, monthly.hoa, monthly.pmi)
+    for line in lines:
+        assert line == line.quantize(D("0.01"))
+    assert monthly.insurance == D("83.33")
+    assert monthly.total == sum(lines, D(0))
 
 
 def test_affordability_validates_inputs():
