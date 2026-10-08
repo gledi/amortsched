@@ -179,3 +179,34 @@ def test_investing_wins_when_returns_exceed_the_loan_rate():
 def test_break_even_return_equals_the_loan_rate():
     result = prepay_vs_invest(prepay_input("7"))
     assert result.break_even_return == D("6.00")
+
+
+def test_level_payment_stays_unrounded():
+    assert level_payment(D(200000), D("7.5"), 180) == pytest.approx(D("1854.0247200054619"), abs=D("1e-9"))
+
+
+def test_amortize_payment_matches_published_pmt_example():
+    assert amortize(D(10000), D(8), 10)[0].payment == D("1037.03")
+
+
+def test_amortize_rows_are_whole_cents_and_end_at_zero():
+    rows = amortize(D(200000), D("7.5"), 180, extra_monthly=D(100))
+    for row in rows:
+        for amount in (row.payment, row.interest, row.principal, row.extra, row.balance):
+            assert amount == amount.quantize(D("0.01"))
+    assert rows[-1].balance == 0
+
+
+def test_refinance_and_prepay_money_is_whole_cents():
+    refi = refinance(
+        RefinanceInput(
+            current_balance=D(300000),
+            current_rate=D("7.125"),
+            remaining_months=300,
+            new_rate=D("5.5"),
+            new_term_months=300,
+        )
+    )
+    for amount in (refi.current_payment, refi.new_payment, refi.current_total_interest, refi.new_total_paid):
+        assert amount == amount.quantize(D("0.01"))
+    assert prepay_vs_invest(prepay_input("3")).regular_payment == D("1199.10")
