@@ -238,12 +238,17 @@ class PrepayVsInvestPlanHandler:
         )
 
 
-def prepay_vs_invest_on_terms(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
-    """Prepay vs invest for entered terms, on engine schedules whose first period starts on the 1st of next month."""
+def prepay_vs_invest_on_terms(
+    data: PrepayVsInvestInput, start_date: datetime.date | None = None
+) -> PrepayVsInvestResult:
+    """Prepay vs invest for entered terms, on engine schedules whose first period starts on `start_date`.
+
+    `start_date` defaults to the 1st of next month.
+    """
     return _prepay_vs_invest_on_schedules(
         lambda: entered_terms_schedule(data.principal, data.interest_rate, data.term_months),
         data,
-        next_month(today().replace(day=1)),
+        start_date or next_month(today().replace(day=1)),
     )
 
 
