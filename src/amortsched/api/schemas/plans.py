@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from amortsched.api.schemas.money import MoneyInput
 from amortsched.api.schemas.schedules import HousingPaymentSchema
 from amortsched.core.entities import Plan
 from amortsched.core.money import ZERO, round_cents, round_percent
@@ -29,15 +30,15 @@ class TermSchema(BaseModel):
 
 
 class EarlyPaymentFeesSchema(BaseModel):
-    fixed: Decimal = Field(default=ZERO, ge=0)
+    fixed: MoneyInput = Field(default=ZERO, ge=0)
     percent: Decimal = Field(default=ZERO, ge=0, le=100)
 
 
 class HousingCostsSchema(BaseModel):
-    property_value: Decimal | None = Field(default=None, gt=0)
-    property_tax_annual: Decimal = Field(default=ZERO, ge=0)
-    insurance_annual: Decimal = Field(default=ZERO, ge=0)
-    hoa_monthly: Decimal = Field(default=ZERO, ge=0)
+    property_value: MoneyInput | None = Field(default=None, gt=0)
+    property_tax_annual: MoneyInput = Field(default=ZERO, ge=0)
+    insurance_annual: MoneyInput = Field(default=ZERO, ge=0)
+    hoa_monthly: MoneyInput = Field(default=ZERO, ge=0)
     pmi_annual_rate: Decimal = Field(default=ZERO, ge=0, le=100)
     pmi_cancel_ltv: Decimal = Field(default=Decimal("78"), gt=0, le=100)
 
@@ -65,7 +66,7 @@ class HousingCostsSchema(BaseModel):
 
 class ExtraPaymentSchema(BaseModel):
     date: datetime.date
-    amount: Decimal = Field(gt=0)
+    amount: MoneyInput = Field(gt=0)
 
     def to_value(self) -> OneTimeExtraPayment:
         return OneTimeExtraPayment(date=self.date, amount=self.amount)
@@ -73,7 +74,7 @@ class ExtraPaymentSchema(BaseModel):
 
 class RecurringExtraPaymentSchema(BaseModel):
     start_date: datetime.date
-    amount: Decimal = Field(gt=0)
+    amount: MoneyInput = Field(gt=0)
     count: int = Field(gt=0, le=600)
 
     def to_value(self) -> RecurringExtraPayment:
@@ -98,14 +99,14 @@ class CreatePlanRequest(AdjustmentsSchema):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     name: str = Field(min_length=1, max_length=200)
-    amount: Decimal = Field(gt=0)
+    amount: MoneyInput = Field(gt=0)
     interest_rate: Decimal = Field(ge=0, le=100)
     term: TermSchema
     start_date: datetime.date | None = None
     loan_type: LoanType = LoanType.Other
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     lender: str | None = Field(default=None, max_length=200)
-    upfront_fees: Decimal = Field(default=ZERO, ge=0)
+    upfront_fees: MoneyInput = Field(default=ZERO, ge=0)
     early_payment_fees: EarlyPaymentFeesSchema = Field(default_factory=EarlyPaymentFeesSchema)
     housing_costs: HousingCostsSchema | None = None
     interest_rate_application: InterestRateApplication = InterestRateApplication.WholeMonth
@@ -115,14 +116,14 @@ class UpdatePlanRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    amount: Decimal | None = Field(default=None, gt=0)
+    amount: MoneyInput | None = Field(default=None, gt=0)
     interest_rate: Decimal | None = Field(default=None, ge=0, le=100)
     term: TermSchema | None = None
     start_date: datetime.date | None = None
     loan_type: LoanType | None = None
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     lender: str | None = Field(default=None, max_length=200)
-    upfront_fees: Decimal | None = Field(default=None, ge=0)
+    upfront_fees: MoneyInput | None = Field(default=None, ge=0)
     early_payment_fees: EarlyPaymentFeesSchema | None = None
     housing_costs: HousingCostsSchema | None = None
     interest_rate_application: InterestRateApplication | None = None
@@ -130,12 +131,12 @@ class UpdatePlanRequest(BaseModel):
 
 class AddExtraPaymentRequest(BaseModel):
     date: datetime.date
-    amount: Decimal = Field(gt=0)
+    amount: MoneyInput = Field(gt=0)
 
 
 class AddRecurringExtraPaymentRequest(BaseModel):
     start_date: datetime.date
-    amount: Decimal = Field(gt=0)
+    amount: MoneyInput = Field(gt=0)
     count: int = Field(gt=0, le=600)
 
 

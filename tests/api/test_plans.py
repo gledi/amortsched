@@ -122,3 +122,18 @@ async def test_rejects_empty_term_and_accepts_zero_interest(client, auth_headers
         headers=auth_headers,
     )
     assert valid.status_code == 201
+
+
+@pytest.mark.anyio
+async def test_create_plan_rejects_sub_cent_amount(client, auth_headers):
+    response = await client.post(
+        "/api/plans",
+        json={
+            "name": "Sub-cent",
+            "amount": "200000.005",
+            "interest_rate": "5.5",
+            "term": {"years": 30, "months": 0},
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422

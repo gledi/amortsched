@@ -5,6 +5,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
+from amortsched.api.schemas.money import MoneyInput
 from amortsched.core.calculators import (
     AffordabilityInput,
     AffordabilityResult,
@@ -13,19 +14,19 @@ from amortsched.core.calculators import (
     RefinanceResult,
     Strategy,
 )
-from amortsched.core.money import round_cents, round_percent
+from amortsched.core.money import ZERO, round_cents, round_percent
 
 
 class AffordabilityRequest(BaseModel):
-    gross_monthly_income: Decimal = Field(gt=0)
-    monthly_debts: Decimal = Field(default=Decimal("0"), ge=0)
-    down_payment: Decimal = Field(default=Decimal("0"), ge=0)
+    gross_monthly_income: MoneyInput = Field(gt=0)
+    monthly_debts: MoneyInput = Field(default=ZERO, ge=0)
+    down_payment: MoneyInput = Field(default=ZERO, ge=0)
     interest_rate: Decimal = Field(ge=0, le=100)
     term_months: int = Field(default=360, ge=1, le=600)
-    property_tax_rate: Decimal = Field(default=Decimal("0"), ge=0, le=100)
-    insurance_annual: Decimal = Field(default=Decimal("0"), ge=0)
-    hoa_monthly: Decimal = Field(default=Decimal("0"), ge=0)
-    pmi_annual_rate: Decimal = Field(default=Decimal("0"), ge=0, le=100)
+    property_tax_rate: Decimal = Field(default=ZERO, ge=0, le=100)
+    insurance_annual: MoneyInput = Field(default=ZERO, ge=0)
+    hoa_monthly: MoneyInput = Field(default=ZERO, ge=0)
+    pmi_annual_rate: Decimal = Field(default=ZERO, ge=0, le=100)
     front_end_ratio: Decimal = Field(default=Decimal("28"), gt=0, le=100)
     back_end_ratio: Decimal = Field(default=Decimal("36"), gt=0, le=100)
 
@@ -81,12 +82,12 @@ class AffordabilityResponse(BaseModel):
 class RefinanceRequest(BaseModel):
     plan_id: uuid.UUID | None = None
     as_of: datetime.date | None = None
-    current_balance: Decimal | None = Field(default=None, gt=0)
+    current_balance: MoneyInput | None = Field(default=None, gt=0)
     current_rate: Decimal | None = Field(default=None, ge=0, le=100)
     remaining_months: int | None = Field(default=None, ge=1, le=600)
     new_rate: Decimal = Field(ge=0, le=100)
     new_term_months: int = Field(ge=1, le=600)
-    closing_costs: Decimal = Field(default=Decimal("0"), ge=0)
+    closing_costs: MoneyInput = Field(default=ZERO, ge=0)
     roll_costs_into_loan: bool = False
 
     @model_validator(mode="after")
@@ -140,10 +141,10 @@ class RefinanceResponse(BaseModel):
 
 class PrepayVsInvestRequest(BaseModel):
     plan_id: uuid.UUID | None = None
-    principal: Decimal | None = Field(default=None, gt=0)
+    principal: MoneyInput | None = Field(default=None, gt=0)
     interest_rate: Decimal | None = Field(default=None, ge=0, le=100)
     term_months: int | None = Field(default=None, ge=1, le=600)
-    extra_monthly: Decimal = Field(gt=0)
+    extra_monthly: MoneyInput = Field(gt=0)
     annual_return: Decimal = Field(ge=-50, le=50)
 
     @model_validator(mode="after")

@@ -150,3 +150,19 @@ async def test_prepay_vs_invest_from_plan(client, auth_headers):
     assert body["break_even_return"] == "6.00"
     assert len(body["timeline"]) == 360
     assert body["months_saved"] > 0
+
+
+@pytest.mark.anyio
+async def test_refinance_rejects_sub_cent_current_balance(client, auth_headers):
+    response = await client.post(
+        "/api/tools/refinance",
+        json={
+            "current_balance": "300000.001",
+            "current_rate": "7",
+            "remaining_months": 300,
+            "new_rate": "5.5",
+            "new_term_months": 300,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
