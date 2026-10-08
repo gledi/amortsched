@@ -8,8 +8,6 @@ Plan mortgages and loans, compare offers, and decide with numbers: a FastAPI bac
 - **Decision tools**: home affordability (28/36 debt-to-income), refinance break-even, prepay vs. invest.
 - **Accounts**: email verification, password reset, change password, sign out other devices, data export, account deletion.
 
-Domain vocabulary lives in `CONTEXT.md`.
-
 ## Stack
 
 - **Backend**: Python 3.14, FastAPI, SQLAlchemy (async) + psycopg, PostgreSQL, Alembic, Pydantic, structlog
