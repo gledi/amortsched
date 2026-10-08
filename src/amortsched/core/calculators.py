@@ -5,11 +5,11 @@ what-if questions. Plan schedules with dated adjustments come from `amortization
 """
 
 from dataclasses import dataclass
-from decimal import ROUND_FLOOR, Decimal
+from decimal import Decimal
 from enum import StrEnum
 
 from amortsched.core.errors import ValidationError
-from amortsched.core.money import CENT, HUNDRED, ZERO, round_cents, round_percent
+from amortsched.core.money import CENT, HUNDRED, ZERO, floor_units, round_cents, round_percent
 from amortsched.core.payments import TWELVE, monthly_payment, monthly_rate, payment_factor
 
 MAX_MONTHS = 600
@@ -170,7 +170,7 @@ def affordability(data: AffordabilityInput) -> AffordabilityResult:
     limiting = LimitingRatio.FrontEnd if front_budget <= back_budget else LimitingRatio.BackEnd
 
     price, pmi_active = _max_price(data, budget)
-    price = price.quantize(Decimal("1"), rounding=ROUND_FLOOR)
+    price = floor_units(price)
     loan = max(ZERO, price - data.down_payment)
     monthly = _housing_cost(price, data, pmi_active)
     total = monthly.total
