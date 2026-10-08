@@ -119,7 +119,13 @@ def _first_kept_period(plan: Plan, as_of: datetime.date) -> tuple[int, datetime.
 
 
 def _remaining_plan(plan: Plan, as_of: datetime.date) -> _RemainingPlan:
-    """The plan's payment periods from the `as_of` month on, with extras kept in the period they fall in."""
+    """The plan's payment periods from the `as_of` month on, with extras kept in the period they fall in.
+
+    The snapshot describes the loan at the start of the first compared period, the plan's period that
+    starts in the `as_of` month, which can be later (or earlier) than `as_of` itself. Its balance is what
+    is owed when that period starts, before its extras, not the balance on `as_of`; its rate is the rate
+    in effect then; its remaining months count the scheduled payments from that period on.
+    """
     schedule = plan.to_schedule()
     rows = period_rows(schedule.generate(plan.start_date))
     skipped, first_period_start = _first_kept_period(plan, as_of)
