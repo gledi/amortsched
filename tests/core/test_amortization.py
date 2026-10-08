@@ -354,3 +354,19 @@ def test_plan_schedule_matches_decision_tool_schedule_to_the_cent(amount, rate, 
     tool_rows = [(row.payment, row.interest, row.principal, row.balance) for row in amortize(amount, rate, years * 12)]
 
     assert engine_rows == tool_rows
+
+
+def test_extra_payment_payoff_row_carries_the_period_interest():
+    schedule = AmortizationSchedule(amount=Decimal("10000"), term=Term(1), interest_rate=Decimal("6"))
+    schedule.add_one_time_extra_payment(datetime.date(2025, 3, 15), Decimal("20000"))
+
+    installments = list(schedule.generate(datetime.date(2025, 1, 1)))
+    totals = schedule.last_totals
+
+    assert totals is not None and totals.paid_off is True
+    payoff = installments[-1]
+    assert payoff.i is None
+    assert payoff.balance.after == Decimal("0.00")
+    assert payoff.payment.interest > 0
+    assert sum(inst.payment.interest for inst in installments) == totals.interest
+    assert sum(inst.payment.principal for inst in installments) == totals.principal

@@ -341,13 +341,16 @@ class AmortizationSchedule:
                 period_end=period_end,
                 balance=balance,
             )
+            paid_off_by_extras = balance <= ZERO
+            if paid_off_by_extras:
+                extras[-1].payment.interest = accrued_interest
             for extra in extras:
                 total_principal += extra.payment.principal
+                total_interest += extra.payment.interest
                 total_fees += extra.payment.fees
                 yield extra
 
-            if balance <= ZERO:
-                total_interest += accrued_interest
+            if paid_off_by_extras:
                 paid_off = True
                 break
 
