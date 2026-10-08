@@ -9,9 +9,9 @@ from decimal import ROUND_FLOOR, Decimal
 from enum import StrEnum
 
 from amortsched.core.errors import ValidationError
+from amortsched.core.money import CENT, round_cents
 
 ZERO = Decimal("0")
-CENT = Decimal("0.01")
 HUNDRED = Decimal("100")
 TWELVE = Decimal("12")
 MAX_MONTHS = 600
@@ -34,6 +34,10 @@ def level_payment(principal: Decimal, annual_rate_percent: Decimal, months: int)
     return principal * payment_factor(annual_rate_percent, months)
 
 
+def monthly_payment(principal: Decimal, annual_rate_percent: Decimal, months: int) -> Decimal:
+    return round_cents(level_payment(principal, annual_rate_percent, months))
+
+
 @dataclass(frozen=True, slots=True)
 class AmortizationMonth:
     month: int
@@ -52,13 +56,13 @@ def amortize(
 ) -> list[AmortizationMonth]:
     """Level-payment schedule; any extra goes to principal after each scheduled payment."""
     rate = monthly_rate(annual_rate_percent)
-    payment = level_payment(principal, annual_rate_percent, months)
+    payment = monthly_payment(principal, annual_rate_percent, months)
     balance = principal
     rows: list[AmortizationMonth] = []
     for month in range(1, months + 1):
         if balance <= 0:
             break
-        interest = balance * rate
+        interest = round_cents(balance * rate)
         scheduled_principal = min(payment - interest, balance) if month < months else balance
         balance -= scheduled_principal
         extra = min(extra_monthly, balance)
@@ -261,7 +265,7 @@ def refinance(data: RefinanceInput) -> RefinanceResult:
     break_even: int | None = None
     for month in range(0, horizon + 1):
         gap = position(current, month, data.current_balance, ZERO) - position(new, month, new_principal, cash_due)
-        advantage.append(gap.quantize(CENT))
+        advantage.append(round_cents(gap))
         if break_even is None and month > 0 and gap >= 0:
             break_even = month
 
@@ -328,7 +332,7 @@ class PrepayVsInvestResult:
 
 def _net_worths(data: PrepayVsInvestInput, annual_return: Decimal) -> list[NetWorthPoint]:
     growth = 1 + annual_return / HUNDRED / TWELVE
-    payment = level_payment(data.principal, data.interest_rate, data.term_months)
+    payment = monthly_payment(data.principal, data.interest_rate, data.term_months)
     prepay = amortize(data.principal, data.interest_rate, data.term_months, data.extra_monthly)
     plain = amortize(data.principal, data.interest_rate, data.term_months)
     prepay_savings = ZERO
@@ -368,7 +372,7 @@ def _break_even_return(data: PrepayVsInvestInput) -> Decimal | None:
             low = middle
         if high - low < Decimal("0.0001"):
             break
-    return ((low + high) / 2).quantize(CENT)
+    return round_cents((low + high) / 2)
 
 
 def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
@@ -393,7 +397,7 @@ def prepay_vs_invest(data: PrepayVsInvestInput) -> PrepayVsInvestResult:
     interest_plain = sum((row.interest for row in plain), ZERO)
     interest_prepay = sum((row.interest for row in prepay), ZERO)
     return PrepayVsInvestResult(
-        regular_payment=level_payment(data.principal, data.interest_rate, data.term_months),
+        regular_payment=monthly_payment(data.principal, data.interest_rate, data.term_months),
         payoff_months_with_prepayment=len(prepay),
         months_saved=len(plain) - len(prepay),
         interest_without_prepayment=interest_plain,
