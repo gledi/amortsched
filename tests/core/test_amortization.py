@@ -305,12 +305,12 @@ def test_fixed_rate_schedule_in_whole_cents_cfpb_h24b():
 
 
 def test_mid_period_extra_payment_rounds_period_interest_once():
-    schedule = AmortizationSchedule(amount=10_003, term=Term(1), interest_rate=Decimal("6"))
+    schedule = AmortizationSchedule(amount=10_001, term=Term(1), interest_rate=Decimal("6"))
     schedule.add_one_time_extra_payment(datetime.date(2025, 1, 16), Decimal("1000"))
     installments = list(schedule.generate(datetime.date(2025, 1, 1)))
 
     first = next(inst for inst in installments if inst.i == 1)
-    assert first.payment.interest == Decimal("50.02")
+    assert first.payment.interest == Decimal("47.42")
 
 
 def test_early_payment_penalty_is_rounded_half_up_to_the_cent():
@@ -399,3 +399,85 @@ def test_extra_payments_dated_on_payment_dates_are_each_applied_once():
         (3, 1),
     ]
     assert sum(principal for i, _, principal in periods if i is None) == Decimal("350")
+
+
+def first_scheduled_row(installments, i=1):
+    return next(inst for inst in installments if inst.i == i)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_interest"),
+    [
+        (InterestRateApplication.WholeMonth, Decimal("47.42")),
+        (InterestRateApplication.ProratedByPaymentPeriod, Decimal("48.33")),
+    ],
+)
+def test_mid_period_extra_lowers_interest_from_its_date(mode, expected_interest):
+    schedule = AmortizationSchedule(
+        amount=10_000, term=Term(1), interest_rate=Decimal("6"), interest_rate_application=mode
+    )
+    schedule.add_one_time_extra_payment(datetime.date(2025, 1, 16), Decimal("1000"))
+    installments = list(schedule.generate(datetime.date(2025, 1, 1)))
+
+    assert first_scheduled_row(installments).payment.interest == expected_interest
+
+
+def test_mid_period_extra_lowers_interest_across_a_month_boundary_prorated_by_days_in_month():
+    schedule = AmortizationSchedule(
+        amount=10_000,
+        term=Term(1),
+        interest_rate=Decimal("6"),
+        interest_rate_application=InterestRateApplication.ProratedByDaysInMonth,
+    )
+    schedule.add_one_time_extra_payment(datetime.date(2025, 2, 3), Decimal("1000"))
+    installments = list(schedule.generate(datetime.date(2025, 1, 10)))
+
+    assert first_scheduled_row(installments).payment.interest == Decimal("49.81")
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [InterestRateApplication.ProratedByPaymentPeriod, InterestRateApplication.ProratedByDaysInMonth],
+)
+@pytest.mark.parametrize(
+    ("extra_date", "expected_interest"),
+    [
+        (datetime.date(2025, 1, 10), Decimal("65.10")),
+        (datetime.date(2025, 1, 20), Decimal("66.74")),
+    ],
+)
+def test_mid_period_extra_and_rate_change_in_the_same_period(mode, extra_date, expected_interest):
+    schedule = AmortizationSchedule(
+        amount=10_000, term=Term(1), interest_rate=Decimal("6"), interest_rate_application=mode
+    )
+    schedule.add_interest_rate_change(datetime.date(2025, 1, 20), Decimal("12"))
+    schedule.add_one_time_extra_payment(extra_date, Decimal("1000"))
+    installments = list(schedule.generate(datetime.date(2025, 1, 1)))
+
+    assert first_scheduled_row(installments).payment.interest == expected_interest
+
+
+def test_recurring_mid_period_extra_lowers_each_period_interest_from_its_date():
+    schedule = AmortizationSchedule(amount=10_000, term=Term(1), interest_rate=Decimal("6"))
+    schedule.add_recurring_extra_payment(datetime.date(2025, 1, 16), Decimal("1000"), count=2)
+    installments = list(schedule.generate(datetime.date(2025, 1, 1)))
+
+    first = first_scheduled_row(installments, 1)
+    second = first_scheduled_row(installments, 2)
+    assert first.payment.interest == Decimal("47.42")
+    assert first.balance.after == Decimal("8186.76")
+    assert second.payment.interest == Decimal("38.61")
+
+
+def test_mid_period_payoff_extra_carries_interest_up_to_its_date():
+    schedule = AmortizationSchedule(amount=10_000, term=Term(1), interest_rate=Decimal("6"))
+    schedule.add_one_time_extra_payment(datetime.date(2025, 3, 15), Decimal("20000"))
+    installments = list(schedule.generate(datetime.date(2025, 1, 1)))
+
+    payoff = installments[-1]
+    assert payoff.i is None
+    assert payoff.balance.before == Decimal("8374.63")
+    assert payoff.payment.principal == Decimal("8374.63")
+    assert payoff.payment.interest == Decimal("18.91")
+    assert schedule.last_totals is not None
+    assert schedule.last_totals.interest == Decimal("114.86")

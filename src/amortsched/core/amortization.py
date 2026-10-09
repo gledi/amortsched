@@ -259,19 +259,18 @@ class AmortizationSchedule:
             days = (segment_end - segment_start).days
             if days <= 0:
                 continue
+            for kind, amount in extras_by_date.get(segment_start, []):
+                extra_row, balance = self._apply_extra_payment(
+                    kind=kind,
+                    dt=segment_start,
+                    requested_amount=amount,
+                    balance=balance,
+                )
+                if extra_row:
+                    installments.append(extra_row)
+
             rate = self._yearly_rate_percent_for_segment(period_start=period_start, segment_start=segment_start)
             interest_numerator += balance * rate * days
-
-            if segment_start in extras_by_date:
-                for kind, amount in extras_by_date[segment_start]:
-                    extra_row, balance = self._apply_extra_payment(
-                        kind=kind,
-                        dt=segment_start,
-                        requested_amount=amount,
-                        balance=balance,
-                    )
-                    if extra_row:
-                        installments.append(extra_row)
 
         day_basis = self._interest_day_basis(period_start=period_start, period_end=period_end)
         interest = round_cents(interest_numerator / (HUNDRED * day_basis))
