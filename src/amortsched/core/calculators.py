@@ -317,7 +317,7 @@ def _net_worths(runs: _PrepayRuns, annual_return: Decimal) -> list[NetWorthPoint
     period's start and grows through the period; cash not spent on the scheduled payment is invested at
     the period's end. This is exact for extras dated on a period start, which lower that whole period's
     interest, and an approximation for mid-period extras, which lower interest only from their date but
-    are invested here from the period's start.
+    are treated here as paid at the period's start.
     """
     growth = 1 + annual_return / HUNDRED / TWELVE
     prepay_savings = ZERO
