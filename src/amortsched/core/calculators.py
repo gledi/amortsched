@@ -311,21 +311,29 @@ class _PrepayRuns:
 
 
 def _net_worths(runs: _PrepayRuns, annual_return: Decimal) -> list[NetWorthPoint]:
+    """Each side's net worth at each period's end, its savings earning over the intervals the loan accrues over.
+
+    Extras are paid at a period's start and lower that whole period's interest, so cash not spent on them
+    is invested then and grows through the period. Scheduled payments are made at the period's end, so
+    cash not spent on them is invested then and starts growing the period after.
+    """
     growth = 1 + annual_return / HUNDRED / TWELVE
     prepay_savings = ZERO
     invest_savings = ZERO
     points: list[NetWorthPoint] = []
     for month, baseline_row in enumerate(runs.baseline, start=1):
-        available = baseline_row.outflow + runs.extra_monthly
+        start_available = baseline_row.outflow - baseline_row.scheduled_payment + runs.extra_monthly
+        end_available = baseline_row.scheduled_payment
         if month <= len(runs.prepay):
             row = runs.prepay[month - 1]
-            leftover = available - row.outflow
+            start_leftover = start_available - (row.outflow - row.scheduled_payment)
+            end_leftover = end_available - row.scheduled_payment
             prepay_debt = row.balance
         else:
-            leftover = available
+            start_leftover, end_leftover = start_available, end_available
             prepay_debt = ZERO
-        prepay_savings = prepay_savings * growth + leftover
-        invest_savings = invest_savings * growth + runs.extra_monthly
+        prepay_savings = (prepay_savings + start_leftover) * growth + end_leftover
+        invest_savings = (invest_savings + runs.extra_monthly) * growth
         points.append(
             NetWorthPoint(
                 month=month,

@@ -186,12 +186,18 @@ def test_prepay_invests_the_baseline_outflow_plus_extra_left_over_each_period():
     assert result.payoff_months_with_prepayment == 3
     assert result.months_saved == 1
     assert result.interest_without_prepayment == D("25.13")
-    assert result.interest_with_prepayment == D("19.58")
-    assert [point.prepay for point in result.timeline] == [D("-653.72"), D("-303.98"), D("49.26"), D("405.55")]
-    assert result.prepay_net_worth == D("405.55")
+    assert result.interest_with_prepayment == D("16.55")
+    assert [point.prepay for point in result.timeline] == [D("-652.72"), D("-301.97"), D("52.29"), D("408.58")]
+    assert result.prepay_net_worth == D("408.58")
     assert [point.invest for point in result.timeline] == [D("-653.72"), D("-304.98"), D("46.25"), D("400")]
-    assert result.advantage == result.interest_saved == D("5.55")
+    assert result.advantage == result.interest_saved == D("8.58")
     assert result.better_strategy is Strategy.Prepay
+
+
+def test_invested_extra_grows_over_the_period_it_is_paid_at_the_start_of():
+    result = prepay_on_engine("1000", "12", 4, "100", "12")
+    each_extra_grown_from_its_period_start = D("410.100501")
+    assert result.invest_net_worth == each_extra_grown_from_its_period_start
 
 
 def test_prepaying_wins_when_returns_are_below_the_loan_rate():
