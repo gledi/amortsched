@@ -33,11 +33,7 @@ test = [
   "pytest-factoryboy",
   "testcontainers",
 ]
-lint = [
-    "ruff",
-    "basedpyright",
-    "import-linter>=2.15",
-]
+lint = ["ruff", "basedpyright", "import-linter"]
 dev = [
   "debugpy",
   "icecream",
@@ -64,8 +60,10 @@ template = '''version = "{version}"
 [tool.uv]
 exclude-newer = "1 week"
 exclude-newer-package = { ruff = "1 day" }
-default-groups = "all"
-cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+cache-keys = [
+  { file = "pyproject.toml" },
+  { git = { commit = true, tags = true } },
+]
 
 [tool.uv-dynamic-versioning]
 fallback-version = "0.0.0"
@@ -103,7 +101,12 @@ root_package = "amortsched"
 [[tool.importlinter.contracts]]
 name = "Layers import inward only"
 type = "layers"
-layers = ["amortsched.api", "amortsched.adapters", "amortsched.app", "amortsched.core"]
+layers = [
+  "amortsched.api",
+  "amortsched.adapters",
+  "amortsched.app",
+  "amortsched.core",
+]
 
 [[tool.importlinter.contracts]]
 name = "Schedule engine and decision tools stay independent"
@@ -114,4 +117,7 @@ modules = ["amortsched.core.amortization", "amortsched.core.calculators"]
 name = "Money and payment math sit below the engines"
 type = "forbidden"
 source_modules = ["amortsched.core.money", "amortsched.core.payments"]
-forbidden_modules = ["amortsched.core.amortization", "amortsched.core.calculators"]
+forbidden_modules = [
+  "amortsched.core.amortization",
+  "amortsched.core.calculators",
+]

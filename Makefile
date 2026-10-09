@@ -85,13 +85,13 @@ relock: ## Re-lock without upgrading anything
 	$(UV) lock
 
 sync: ## Sync all dependencies from lockfile
-	$(UV) sync --locked --all-extras --link-mode=copy
+	$(UV) sync --locked --all-extras --all-groups --link-mode=copy
 
 sync/prod: ## Sync runtime + prod deps only (no dev groups)
 	$(UV) sync --locked --extra=prod --no-default-groups --link-mode=copy
 
 sync/dry: ## Dry-run sync from lockfile
-	$(UV) sync --locked --all-extras --dry-run
+	$(UV) sync --locked --all-extras --all-groups --dry-run
 
 outdated: ## List outdated packages
 	$(UV) pip list --outdated
