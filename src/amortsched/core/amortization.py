@@ -240,7 +240,7 @@ class AmortizationSchedule:
         period_end: datetime.date,
         balance: Decimal,
     ) -> tuple[list[Installment], Decimal, Decimal]:
-        extras = self._extras_for_period(period_start, period_end)
+        extras = self._extras_for_period(period_start + datetime.timedelta(days=1), period_end)
         extras_by_date: dict[datetime.date, list[tuple[PaymentKind, Decimal]]] = {}
         for kind, dt, amount in extras:
             extras_by_date.setdefault(dt, []).append((kind, amount))
@@ -276,6 +276,14 @@ class AmortizationSchedule:
         day_basis = self._interest_day_basis(period_start=period_start, period_end=period_end)
         interest = round_cents(interest_numerator / (HUNDRED * day_basis))
         return installments, balance, interest
+
+    def _apply_extras_on(self, dt: datetime.date, balance: Decimal) -> tuple[list[Installment], Decimal]:
+        installments: list[Installment] = []
+        for kind, _, amount in self._extras_for_period(dt, dt + datetime.timedelta(days=1)):
+            row, balance = self._apply_extra_payment(kind=kind, dt=dt, requested_amount=amount, balance=balance)
+            if row:
+                installments.append(row)
+        return installments, balance
 
     def _validate_one_time_extra_payment(self, date: datetime.date, amount: Decimal) -> None:
         if amount <= 0:
@@ -313,16 +321,19 @@ class AmortizationSchedule:
             period_start = date
             period_end = next_month(date, base_day=base_day)
 
+            extras, balance = self._apply_extras_on(period_start, balance)
+
             period_rate = self.yearly_rate_percent_on(period_start)
             if period_rate != payment_rate:
                 payment_rate = period_rate
                 scheduled_amount = monthly_payment(balance, payment_rate, self.periods - scheduled_payment_index)
 
-            extras, balance, accrued_interest = self._accrue_interest_and_apply_extras(
+            later_extras, balance, accrued_interest = self._accrue_interest_and_apply_extras(
                 period_start=period_start,
                 period_end=period_end,
                 balance=balance,
             )
+            extras += later_extras
             paid_off_by_extras = balance <= ZERO
             if paid_off_by_extras:
                 extras[-1].payment.interest = accrued_interest

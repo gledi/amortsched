@@ -235,6 +235,35 @@ def test_extra_payment_before_rate_change_lowers_recalculated_payment_and_keeps_
     assert schedule.last_totals.paid_off is True
 
 
+def test_extra_payment_dated_on_rate_change_lowers_recalculated_payment():
+    schedule = AmortizationSchedule(amount=100_000, term=Term(30), interest_rate=Decimal("9"))
+    schedule.add_interest_rate_change(datetime.date(2026, 1, 1), Decimal("12"))
+    schedule.add_one_time_extra_payment(datetime.date(2026, 1, 1), Decimal("10000"))
+    installments = list(schedule.generate(datetime.date(2025, 1, 1)))
+
+    rows = [inst for inst in installments if inst.i is not None]
+    payments = scheduled_payments(installments)
+    assert payments[:12] == [Decimal("804.62")] * 12
+    assert rows[12].balance.before == Decimal("89316.84")
+    assert rows[12].payment.interest == Decimal("893.17")
+    assert payments[12:359] == [Decimal("922.07")] * 347
+    assert installments[-1].balance.after == Decimal("0")
+
+
+def test_recurring_extra_starting_on_rate_change_lowers_recalculated_payment():
+    schedule = AmortizationSchedule(amount=100_000, term=Term(30), interest_rate=Decimal("9"))
+    schedule.add_interest_rate_change(datetime.date(2026, 1, 1), Decimal("12"))
+    schedule.add_recurring_extra_payment(datetime.date(2026, 1, 1), Decimal("1000"), count=3)
+    installments = list(schedule.generate(datetime.date(2025, 1, 1)))
+
+    rows = [inst for inst in installments if inst.i is not None]
+    payments = scheduled_payments(installments)
+    assert rows[12].balance.before == Decimal("98316.84")
+    assert rows[12].payment.interest == Decimal("983.17")
+    assert payments[12] == Decimal("1014.98")
+    assert installments[-1].balance.after == Decimal("0")
+
+
 @pytest.mark.parametrize(
     "mode",
     [InterestRateApplication.ProratedByPaymentPeriod, InterestRateApplication.ProratedByDaysInMonth],
